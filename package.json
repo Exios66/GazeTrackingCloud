@@ -1,0 +1,30 @@
+{
+  "name": "gaze-tracking-cloud",
+  "version": "1.0.0",
+  "description": "A web application for eye tracking using the GazeRecorder API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/username/GazeTrackingCloud.git"
+  },
+  "keywords": [
+    "eye-tracking",
+    "gaze",
+    "heatmap",
+    "webcam"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/username/GazeTrackingCloud/issues"
+  },
+  "homepage": "https://github.com/username/GazeTrackingCloud#readme",
+  "dependencies": {},
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  }
+} 
