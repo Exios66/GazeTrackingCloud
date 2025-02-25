@@ -9,6 +9,15 @@ const GazeHeatmap = (() => {
     let isVisible = false;
     let pointsAdded = 0;
     
+    // Performance optimization constants
+    const MAX_POINTS_BEFORE_DOWNSAMPLE = 5000; // Maximum points before downsampling
+    const REPAINT_INTERVAL = 500; // Minimum time between repaints in ms
+    const DOWNSAMPLE_FACTOR = 0.5; // Keep 50% of points when downsampling
+    
+    let lastRepaintTime = 0;
+    let pendingRepaint = false;
+    let dataBuffer = []; // Buffer for data points to be added
+    
     /**
      * Initialize the heatmap
      * @param {string} containerId - The ID of the container element
@@ -62,8 +71,8 @@ const GazeHeatmap = (() => {
             return;
         }
         
-        // Add point to heatmap
-        heatmapInstance.addData({
+        // Add point to buffer
+        dataBuffer.push({
             x: Math.round(x),
             y: Math.round(y),
             value
@@ -71,9 +80,82 @@ const GazeHeatmap = (() => {
         
         pointsAdded++;
         
-        // Update heatmap every 10 points to avoid performance issues
-        if (pointsAdded % 10 === 0 && isVisible) {
-            heatmapInstance.repaint();
+        // Process buffer if we have enough points or enough time has passed
+        if (dataBuffer.length >= 10) {
+            processDataBuffer();
+        }
+    };
+    
+    /**
+     * Process the data buffer and add points to the heatmap
+     */
+    const processDataBuffer = () => {
+        if (!heatmapInstance || dataBuffer.length === 0) {
+            return;
+        }
+        
+        // Add all points from buffer to heatmap
+        dataBuffer.forEach(point => {
+            heatmapInstance.addData(point);
+        });
+        
+        // Clear buffer
+        dataBuffer = [];
+        
+        // Check if we need to repaint
+        const now = Date.now();
+        if (now - lastRepaintTime >= REPAINT_INTERVAL) {
+            if (isVisible) {
+                heatmapInstance.repaint();
+            }
+            lastRepaintTime = now;
+            pendingRepaint = false;
+        } else if (!pendingRepaint) {
+            // Schedule a repaint for later
+            pendingRepaint = true;
+            setTimeout(() => {
+                if (isVisible && pendingRepaint) {
+                    heatmapInstance.repaint();
+                    lastRepaintTime = Date.now();
+                    pendingRepaint = false;
+                }
+            }, REPAINT_INTERVAL - (now - lastRepaintTime));
+        }
+        
+        // Check if we need to downsample
+        checkAndDownsample();
+    };
+    
+    /**
+     * Check if we need to downsample the heatmap data and do it if necessary
+     */
+    const checkAndDownsample = () => {
+        if (!heatmapInstance) {
+            return;
+        }
+        
+        // Get current data
+        const data = heatmapInstance.getData();
+        
+        // If we have too many points, downsample
+        if (data.data && data.data.length > MAX_POINTS_BEFORE_DOWNSAMPLE) {
+            console.log(`Downsampling heatmap from ${data.data.length} points`);
+            
+            // Sort by value (intensity) to keep the most important points
+            const sortedData = [...data.data].sort((a, b) => b.value - a.value);
+            
+            // Keep a percentage of the points
+            const pointsToKeep = Math.floor(sortedData.length * DOWNSAMPLE_FACTOR);
+            const downsampledData = sortedData.slice(0, pointsToKeep);
+            
+            // Update the heatmap with downsampled data
+            heatmapInstance.setData({
+                max: data.max,
+                min: data.min,
+                data: downsampledData
+            });
+            
+            console.log(`Downsampled to ${downsampledData.length} points`);
         }
     };
     
@@ -90,14 +172,35 @@ const GazeHeatmap = (() => {
         // Clear existing data
         clear();
         
+        // If we have too many points, downsample before setting
+        let dataToUse = data;
+        if (data.length > MAX_POINTS_BEFORE_DOWNSAMPLE) {
+            console.log(`Downsampling input data from ${data.length} points`);
+            
+            // Sort by value (intensity) if available, otherwise random sample
+            if (data[0] && data[0].value !== undefined) {
+                const sortedData = [...data].sort((a, b) => b.value - a.value);
+                dataToUse = sortedData.slice(0, MAX_POINTS_BEFORE_DOWNSAMPLE);
+            } else {
+                // Random sampling
+                dataToUse = [];
+                const step = data.length / MAX_POINTS_BEFORE_DOWNSAMPLE;
+                for (let i = 0; i < data.length; i += step) {
+                    dataToUse.push(data[Math.floor(i)]);
+                }
+            }
+            
+            console.log(`Downsampled to ${dataToUse.length} points`);
+        }
+        
         // Set new data
         heatmapInstance.setData({
             max: 10,
             min: 0,
-            data
+            data: dataToUse
         });
         
-        console.log(`Heatmap generated from ${data.length} data points`);
+        console.log(`Heatmap generated from ${dataToUse.length} data points`);
     };
     
     /**
@@ -115,6 +218,7 @@ const GazeHeatmap = (() => {
         // Force repaint to ensure heatmap is visible
         if (heatmapInstance) {
             heatmapInstance.repaint();
+            lastRepaintTime = Date.now();
         }
         
         console.log('Heatmap shown');
@@ -150,7 +254,10 @@ const GazeHeatmap = (() => {
             data: []
         });
         
+        dataBuffer = [];
         pointsAdded = 0;
+        lastRepaintTime = 0;
+        pendingRepaint = false;
         
         console.log('Heatmap cleared');
     };
@@ -336,6 +443,8 @@ const GazeHeatmap = (() => {
         clear,
         exportAsImage,
         saveAsImage,
-        generateSummary
+        generateSummary,
+        processDataBuffer,
+        checkAndDownsample
     };
 })(); 

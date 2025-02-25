@@ -166,6 +166,49 @@ const GazeDB = (() => {
     };
 
     /**
+     * Store a batch of gaze data for better performance
+     * @param {number} sessionId - The ID of the current session
+     * @param {Array} gazeDataBatch - Array of gaze data objects to store
+     * @returns {Promise} - Resolves when all data is stored
+     */
+    const storeBatchGazeData = (sessionId, gazeDataBatch) => {
+        return new Promise((resolve, reject) => {
+            if (!db) {
+                reject(new Error('Database not initialized'));
+                return;
+            }
+            
+            if (!gazeDataBatch || gazeDataBatch.length === 0) {
+                resolve();
+                return;
+            }
+            
+            const transaction = db.transaction([GAZE_STORE], 'readwrite');
+            const store = transaction.objectStore(GAZE_STORE);
+            
+            // Set up transaction event handlers
+            transaction.oncomplete = () => {
+                resolve();
+            };
+            
+            transaction.onerror = (event) => {
+                console.error('Error in batch transaction:', event.target.error);
+                reject(event.target.error);
+            };
+            
+            // Add each data point to the store
+            gazeDataBatch.forEach(gazeData => {
+                const dataToStore = {
+                    sessionId,
+                    ...gazeData
+                };
+                
+                store.add(dataToStore);
+            });
+        });
+    };
+
+    /**
      * Get all gaze data for a session
      * @param {number} sessionId - The ID of the session
      * @returns {Promise<Array>} - Resolves with an array of gaze data
@@ -189,6 +232,107 @@ const GazeDB = (() => {
             
             request.onerror = (event) => {
                 console.error('Error retrieving session data:', event.target.error);
+                reject(event.target.error);
+            };
+        });
+    };
+
+    /**
+     * Get session data in chunks to avoid memory issues with large datasets
+     * @param {number} sessionId - The ID of the session
+     * @param {number} offset - Starting index
+     * @param {number} limit - Maximum number of records to retrieve
+     * @returns {Promise<Array>} - Resolves with an array of gaze data
+     */
+    const getSessionDataChunk = (sessionId, offset = 0, limit = 1000) => {
+        return new Promise((resolve, reject) => {
+            if (!db) {
+                reject(new Error('Database not initialized'));
+                return;
+            }
+            
+            const transaction = db.transaction([GAZE_STORE], 'readonly');
+            const store = transaction.objectStore(GAZE_STORE);
+            const index = store.index('sessionId');
+            
+            // First get all keys for the session
+            const keysRequest = index.getAllKeys(sessionId);
+            
+            keysRequest.onsuccess = (event) => {
+                const keys = event.target.result;
+                
+                // If no keys or offset is beyond available data
+                if (!keys || keys.length === 0 || offset >= keys.length) {
+                    resolve([]);
+                    return;
+                }
+                
+                // Calculate the actual limit based on available data
+                const actualLimit = Math.min(limit, keys.length - offset);
+                const targetKeys = keys.slice(offset, offset + actualLimit);
+                
+                // Create an array to store the results
+                const results = [];
+                let completed = 0;
+                
+                // Function to check if all requests are complete
+                const checkComplete = () => {
+                    if (completed === targetKeys.length) {
+                        resolve(results);
+                    }
+                };
+                
+                // Retrieve each record by key
+                targetKeys.forEach(key => {
+                    const getRequest = store.get(key);
+                    
+                    getRequest.onsuccess = (event) => {
+                        if (event.target.result) {
+                            results.push(event.target.result);
+                        }
+                        completed++;
+                        checkComplete();
+                    };
+                    
+                    getRequest.onerror = (event) => {
+                        console.error('Error retrieving data point:', event.target.error);
+                        completed++;
+                        checkComplete();
+                    };
+                });
+            };
+            
+            keysRequest.onerror = (event) => {
+                console.error('Error retrieving session keys:', event.target.error);
+                reject(event.target.error);
+            };
+        });
+    };
+
+    /**
+     * Count the number of data points for a session
+     * @param {number} sessionId - The ID of the session
+     * @returns {Promise<number>} - Resolves with the count
+     */
+    const countSessionData = (sessionId) => {
+        return new Promise((resolve, reject) => {
+            if (!db) {
+                reject(new Error('Database not initialized'));
+                return;
+            }
+            
+            const transaction = db.transaction([GAZE_STORE], 'readonly');
+            const store = transaction.objectStore(GAZE_STORE);
+            const index = store.index('sessionId');
+            
+            const countRequest = index.count(sessionId);
+            
+            countRequest.onsuccess = (event) => {
+                resolve(event.target.result);
+            };
+            
+            countRequest.onerror = (event) => {
+                console.error('Error counting session data:', event.target.error);
                 reject(event.target.error);
             };
         });
@@ -241,7 +385,10 @@ const GazeDB = (() => {
         createSession,
         endSession,
         storeGazeData,
+        storeBatchGazeData,
         getSessionData,
+        getSessionDataChunk,
+        countSessionData,
         getAllSessions,
         exportSessionData
     };

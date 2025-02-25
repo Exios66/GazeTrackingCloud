@@ -15,6 +15,18 @@ const GazeTracker = (() => {
     const MAX_API_LOAD_ATTEMPTS = 5;
     const API_LOAD_TIMEOUT = 10000; // 10 seconds timeout
     
+    // Performance optimization constants
+    const BATCH_SIZE = 100; // Number of data points to batch before storing
+    const MEMORY_LIMIT = 10000; // Maximum number of data points to keep in memory
+    const HEATMAP_UPDATE_INTERVAL = 30; // Update heatmap every N points
+    const AUTO_SAVE_INTERVAL = 5 * 60 * 1000; // Auto-save every 5 minutes (in ms)
+    
+    let gazeDataBatch = []; // Batch for efficient database writes
+    let autoSaveTimer = null; // Timer for auto-saving during long sessions
+    let lastPerformanceCheck = 0; // Timestamp of last performance check
+    let performanceCheckInterval = 60000; // Check performance every minute
+    let lastMemoryUsage = 0; // Last recorded memory usage
+    
     // DOM elements
     let gazeXElement = null;
     let gazeYElement = null;
@@ -228,21 +240,20 @@ const GazeTracker = (() => {
             return;
         }
         
-        // Check if API is loaded
+        // Check if API is available
         if (!isAPIAvailable()) {
-            console.error('GazeCloudAPI not available, attempting to load...');
-            showError('GazeCloudAPI not loaded. Attempting to load it now...');
+            console.warn('GazeCloudAPI not available, attempting to load...');
             
             try {
-                await loadGazeCloudAPI();
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a bit for API to initialize
-                if (!checkAndInitializeAPI()) {
-                    showError('Failed to initialize GazeCloudAPI. Please refresh the page.');
+                const apiLoaded = await loadGazeCloudAPI();
+                if (!apiLoaded) {
+                    console.error('Failed to load GazeCloudAPI');
+                    showError('Failed to load eye tracking API. Please check your internet connection and try again.');
                     return;
                 }
             } catch (error) {
-                console.error('Failed to load GazeCloudAPI:', error);
-                showError('Failed to load GazeCloudAPI. Please refresh the page.');
+                console.error('Error loading GazeCloudAPI:', error);
+                showError('Failed to load eye tracking API. Please check your internet connection and try again.');
                 return;
             }
         }
@@ -254,14 +265,20 @@ const GazeTracker = (() => {
             currentSessionId = await GazeDB.createSession();
             console.log('Created session with ID:', currentSessionId);
             
-            // Reset counters and data array
+            // Reset counters and data arrays
             dataPointsCount = 0;
             allGazeData = [];
+            gazeDataBatch = [];
             startTime = Date.now();
+            lastPerformanceCheck = Date.now();
+            lastMemoryUsage = getMemoryUsage();
             updateDataPointsDisplay();
             
             // Start duration timer
             durationInterval = setInterval(updateDurationDisplay, 1000);
+            
+            // Start auto-save timer for long sessions
+            autoSaveTimer = setInterval(autoSaveSession, AUTO_SAVE_INTERVAL);
             
             // Start GazeCloudAPI
             if (typeof GazeCloudAPI !== 'undefined') {
@@ -390,13 +407,19 @@ const GazeTracker = (() => {
                 GazeCloudAPI.StopEyeTracking();
             }
             
-            // Stop duration timer
+            // Stop timers
             clearInterval(durationInterval);
+            clearInterval(autoSaveTimer);
             
             // Disconnect video observer if it exists
             if (window.gazeVideoObserver) {
                 window.gazeVideoObserver.disconnect();
                 window.gazeVideoObserver = null;
+            }
+            
+            // Flush any remaining data in the batch
+            if (gazeDataBatch.length > 0) {
+                await flushGazeDataBatch();
             }
             
             // End session in database
@@ -411,7 +434,7 @@ const GazeTracker = (() => {
                 }
                 
                 // Generate and save CSV file with improved formatting
-                const csvData = generateCSV(allGazeData);
+                const csvData = await generateCSV(currentSessionId);
                 
                 // Format date for filename
                 const now = new Date();
@@ -567,7 +590,10 @@ const GazeTracker = (() => {
         
         // Add to heatmap if tracking (not just calibrating)
         if (isTracking) {
-            GazeHeatmap.addGazePoint(docX, docY);
+            // Update heatmap less frequently for better performance
+            if (dataPointsCount % HEATMAP_UPDATE_INTERVAL === 0) {
+                GazeHeatmap.addGazePoint(docX, docY);
+            }
             
             // Store in database and memory
             storeGazeData(gazeData);
@@ -619,11 +645,18 @@ const GazeTracker = (() => {
                 timestamp: time || Date.now()
             };
             
-            // Store in database
-            await GazeDB.storeGazeData(currentSessionId, dataObject);
+            // Add to batch
+            gazeDataBatch.push(dataObject);
             
-            // Store in memory
-            allGazeData.push(dataObject);
+            // Store in memory (with limit check)
+            if (allGazeData.length < MEMORY_LIMIT) {
+                allGazeData.push(dataObject);
+            }
+            
+            // Flush batch when it reaches the batch size
+            if (gazeDataBatch.length >= BATCH_SIZE) {
+                await flushGazeDataBatch();
+            }
         } catch (error) {
             console.error('Error storing gaze data:', error);
         }
@@ -664,59 +697,76 @@ const GazeTracker = (() => {
     };
     
     /**
-     * Generate CSV data from gaze data
-     * @param {Array} gazeData - The gaze data array
-     * @returns {string} - CSV string
+     * Generate CSV from session data
+     * @param {string} sessionId - The session ID to generate CSV for
+     * @returns {string} - The CSV content
      */
-    const generateCSV = (gazeData) => {
-        if (!gazeData || gazeData.length === 0) {
-            return 'No data available';
+    const generateCSV = async (sessionId) => {
+        try {
+            // Get session data from database instead of using in-memory data
+            // This ensures we have all data even if memory was trimmed
+            const sessionData = await GazeDB.getSessionData(sessionId);
+            
+            if (!sessionData || sessionData.length === 0) {
+                console.warn('No session data found for CSV generation');
+                return '';
+            }
+            
+            // Get session start time
+            const sessionStartTime = sessionData[0].timestamp;
+            
+            // Generate CSV header
+            const header = [
+                'timestamp',          // Unix timestamp (milliseconds)
+                'datetime',           // ISO date format
+                'elapsed_time',       // Elapsed time from session start (HH:MM:SS.mmm)
+                'gaze_x',             // Gaze X coordinate
+                'gaze_y',             // Gaze Y coordinate
+                'gaze_state',         // Gaze state (descriptive)
+                'session_id'          // Session ID
+            ].join(',');
+            
+            // Process data in chunks to avoid memory issues with large datasets
+            const CHUNK_SIZE = 5000;
+            let csvContent = header + '\n';
+            
+            for (let i = 0; i < sessionData.length; i += CHUNK_SIZE) {
+                const chunk = sessionData.slice(i, i + CHUNK_SIZE);
+                
+                // Process chunk
+                const chunkContent = chunk.map(data => {
+                    // Calculate elapsed time from session start
+                    const elapsedMs = data.timestamp - sessionStartTime;
+                    const elapsedSec = Math.floor(elapsedMs / 1000);
+                    const hours = Math.floor(elapsedSec / 3600).toString().padStart(2, '0');
+                    const minutes = Math.floor((elapsedSec % 3600) / 60).toString().padStart(2, '0');
+                    const seconds = (elapsedSec % 60).toString().padStart(2, '0');
+                    const milliseconds = (elapsedMs % 1000).toString().padStart(3, '0');
+                    const elapsedFormatted = `${hours}:${minutes}:${seconds}.${milliseconds}`;
+                    
+                    // Format date and time
+                    const date = new Date(data.timestamp);
+                    const dateFormatted = date.toISOString();
+                    
+                    return [
+                        data.timestamp,                      // Unix timestamp (milliseconds)
+                        dateFormatted,                       // ISO date format (YYYY-MM-DDTHH:MM:SS.sssZ)
+                        elapsedFormatted,                    // Elapsed time (HH:MM:SS.mmm)
+                        data.gazeX.toFixed(2),               // Gaze X coordinate with 2 decimal places
+                        data.gazeY.toFixed(2),               // Gaze Y coordinate with 2 decimal places
+                        getGazeStateDescription(data.gazeState), // Descriptive gaze state
+                        sessionId                            // Session ID
+                    ].join(',');
+                }).join('\n');
+                
+                csvContent += chunkContent + '\n';
+            }
+            
+            return csvContent;
+        } catch (error) {
+            console.error('Error generating CSV:', error);
+            return '';
         }
-        
-        // CSV header with more descriptive column names
-        const headers = [
-            'unix_timestamp',
-            'date_time',
-            'elapsed_time',
-            'gaze_x',
-            'gaze_y',
-            'gaze_state',
-            'session_id'
-        ];
-        
-        // Get session start time for calculating elapsed time
-        const sessionStartTime = gazeData[0].timestamp;
-        
-        // Create CSV content with improved formatting
-        const csvContent = [
-            headers.join(','),
-            ...gazeData.map((data, index) => {
-                // Calculate elapsed time from session start
-                const elapsedMs = data.timestamp - sessionStartTime;
-                const elapsedSec = Math.floor(elapsedMs / 1000);
-                const hours = Math.floor(elapsedSec / 3600).toString().padStart(2, '0');
-                const minutes = Math.floor((elapsedSec % 3600) / 60).toString().padStart(2, '0');
-                const seconds = (elapsedSec % 60).toString().padStart(2, '0');
-                const milliseconds = (elapsedMs % 1000).toString().padStart(3, '0');
-                const elapsedFormatted = `${hours}:${minutes}:${seconds}.${milliseconds}`;
-                
-                // Format date and time
-                const date = new Date(data.timestamp);
-                const dateFormatted = date.toISOString();
-                
-                return [
-                    data.timestamp,                      // Unix timestamp (milliseconds)
-                    dateFormatted,                       // ISO date format (YYYY-MM-DDTHH:MM:SS.sssZ)
-                    elapsedFormatted,                    // Elapsed time (HH:MM:SS.mmm)
-                    data.gazeX.toFixed(2),               // Gaze X coordinate with 2 decimal places
-                    data.gazeY.toFixed(2),               // Gaze Y coordinate with 2 decimal places
-                    getGazeStateDescription(data.gazeState), // Descriptive gaze state
-                    currentSessionId                     // Session ID
-                ].join(',');
-            })
-        ].join('\n');
-        
-        return csvContent;
     };
     
     /**
@@ -923,7 +973,7 @@ const GazeTracker = (() => {
             }
             
             // Generate CSV
-            const csvData = generateCSV(dataToExport);
+            const csvData = await generateCSV(currentSessionId);
             
             // Format date for filename
             const now = new Date();
@@ -993,6 +1043,89 @@ const GazeTracker = (() => {
         return typeof GazeCloudAPI !== 'undefined';
     };
     
+    /**
+     * Auto-save session data during long recordings
+     */
+    const autoSaveSession = async () => {
+        if (!isTracking || !currentSessionId) {
+            return;
+        }
+        
+        try {
+            console.log('Auto-saving session data...');
+            
+            // Flush any pending data
+            if (gazeDataBatch.length > 0) {
+                await flushGazeDataBatch();
+            }
+            
+            // Check memory usage and performance
+            checkPerformance();
+            
+            console.log(`Auto-saved ${dataPointsCount} data points`);
+            showStatusMessage('Session data auto-saved');
+        } catch (error) {
+            console.error('Error during auto-save:', error);
+        }
+    };
+    
+    /**
+     * Check system performance during long sessions
+     */
+    const checkPerformance = () => {
+        const now = Date.now();
+        
+        // Only check every minute
+        if (now - lastPerformanceCheck < performanceCheckInterval) {
+            return;
+        }
+        
+        lastPerformanceCheck = now;
+        
+        // Check memory usage
+        const currentMemoryUsage = getMemoryUsage();
+        const memoryDelta = currentMemoryUsage - lastMemoryUsage;
+        lastMemoryUsage = currentMemoryUsage;
+        
+        console.log(`Memory usage: ${currentMemoryUsage.toFixed(2)} MB (${memoryDelta > 0 ? '+' : ''}${memoryDelta.toFixed(2)} MB)`);
+        
+        // If memory usage is growing too fast, trim the in-memory data
+        if (memoryDelta > 10 && allGazeData.length > MEMORY_LIMIT) {
+            console.log(`Memory usage growing too fast, trimming in-memory data from ${allGazeData.length} points`);
+            allGazeData = allGazeData.slice(-MEMORY_LIMIT);
+            console.log(`Trimmed to ${allGazeData.length} points`);
+        }
+    };
+    
+    /**
+     * Get current memory usage in MB
+     */
+    const getMemoryUsage = () => {
+        if (window.performance && window.performance.memory) {
+            return window.performance.memory.usedJSHeapSize / (1024 * 1024);
+        }
+        return 0;
+    };
+    
+    /**
+     * Flush batched gaze data to database
+     */
+    const flushGazeDataBatch = async () => {
+        if (gazeDataBatch.length === 0) {
+            return;
+        }
+        
+        try {
+            // Store batch in database
+            await GazeDB.storeBatchGazeData(currentSessionId, gazeDataBatch);
+            
+            // Clear the batch
+            gazeDataBatch = [];
+        } catch (error) {
+            console.error('Error flushing gaze data batch:', error);
+        }
+    };
+    
     return {
         init,
         startTracking,
@@ -1010,6 +1143,9 @@ const GazeTracker = (() => {
         isAPIAvailable,
         loadGazeCloudAPI,
         checkAndInitializeAPI,
-        updateAPIStatusDisplay
+        updateAPIStatusDisplay,
+        autoSaveSession,
+        checkPerformance,
+        flushGazeDataBatch
     };
 })(); 
