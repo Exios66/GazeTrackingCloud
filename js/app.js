@@ -4,13 +4,23 @@
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM loaded, initializing application...');
+    
+    // Add global error handler for debugging
+    window.onerror = function(message, source, lineno, colno, error) {
+        console.error('Global error:', message, 'at', source, lineno, colno);
+        console.error('Error object:', error);
+        showError('An error occurred: ' + message);
+        return true;
+    };
+    
     // Check for camera permissions
     checkCameraPermissions();
     
     // Initialize database
     try {
         await GazeDB.init();
-        console.log('Database initialized');
+        console.log('Database initialized successfully');
     } catch (error) {
         console.error('Error initializing database:', error);
         showError('Failed to initialize database. Please refresh the page and try again.');
@@ -20,7 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize tracker with error handling
     try {
         GazeTracker.init();
-        console.log('GazeTracker initialized successfully');
+        console.log('GazeTracker initialization started');
     } catch (error) {
         console.error('Failed to initialize GazeTracker:', error);
         showError('Failed to initialize eye tracking API. Please refresh and try again.');
@@ -33,23 +43,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeChart();
     
     // Check if API is loaded correctly
-    const apiStatus = GazeTracker.isAPIAvailable();
-    console.log('GazeCloud API status:', apiStatus ? 'Available' : 'Unavailable');
-    
-    // Update API status with error handling
-    try {
-        updateAPIStatus();
-        // Set interval to check API status periodically
-        setInterval(updateAPIStatus, 5000);
-    } catch (error) {
-        console.error('Error checking API status:', error);
-        showError('Error connecting to eye tracking service');
-    }
+    setTimeout(() => {
+        const apiStatus = GazeTracker.isAPIAvailable();
+        console.log('GazeCloud API status check:', apiStatus ? 'Available' : 'Unavailable');
+        
+        // Update API status with error handling
+        try {
+            updateAPIStatus();
+            // Set interval to check API status periodically
+            setInterval(updateAPIStatus, 5000);
+        } catch (error) {
+            console.error('Error checking API status:', error);
+            showError('Error connecting to eye tracking service');
+        }
+    }, 2000); // Give the API some time to load
     
     // Add CSS for disabled buttons
     addButtonStyles();
     
-    console.log('Application initialized');
+    console.log('Application initialization completed');
 });
 
 /**
@@ -103,6 +115,8 @@ function addButtonStyles() {
  * Check for camera permissions and ensure camera system is properly initialized
  */
 function checkCameraPermissions() {
+    console.log('Checking camera permissions...');
+    
     // Check if mediaDevices API is available
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         console.error('Camera API not supported in this browser');
@@ -149,6 +163,8 @@ function checkCameraPermissions() {
  * Set up event listeners for UI elements
  */
 function setupEventListeners() {
+    console.log('Setting up event listeners...');
+    
     // Start tracking button
     const startTrackingBtn = document.getElementById('start-tracking');
     if (startTrackingBtn) {
@@ -156,9 +172,22 @@ function setupEventListeners() {
             e.preventDefault();
             
             try {
+                console.log('Start tracking button clicked');
+                
                 if (!GazeTracker.isAPIAvailable()) {
-                    GazeTracker.showError('GazeCloud API not loaded. Please reload the API and try again.');
-                    return;
+                    console.log('API not available, attempting to load...');
+                    GazeTracker.showError('GazeCloud API not loaded. Attempting to reload the API...');
+                    
+                    // Try to reload the API
+                    try {
+                        await GazeTracker.loadGazeCloudAPI();
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a bit
+                        await GazeTracker.checkAndInitializeAPI();
+                    } catch (error) {
+                        console.error('Failed to load API:', error);
+                        GazeTracker.showError('Failed to load GazeCloud API. Please refresh the page and try again.');
+                        return;
+                    }
                 }
                 
                 if (!GazeTracker.isTrackingActive() && !GazeTracker.isCalibrationActive()) {
@@ -176,6 +205,7 @@ function setupEventListeners() {
                     }
                     
                     // Start calibration first
+                    console.log('Starting calibration...');
                     await GazeTracker.startCalibration();
                 }
             } catch (error) {
@@ -197,6 +227,8 @@ function setupEventListeners() {
             e.preventDefault();
             
             try {
+                console.log('Stop tracking button clicked');
+                
                 if (GazeTracker.isTrackingActive()) {
                     // Disable button during processing
                     stopTrackingBtn.classList.add('disabled');
@@ -412,6 +444,7 @@ function setupEventListeners() {
             e.preventDefault();
             
             try {
+                console.log('Reload API button clicked');
                 reloadAPIBtn.textContent = 'Loading...';
                 reloadAPIBtn.classList.add('disabled');
                 
@@ -436,6 +469,7 @@ function setupEventListeners() {
     const checkAPIStatusBtn = document.getElementById('check-api-status');
     if (checkAPIStatusBtn) {
         checkAPIStatusBtn.addEventListener('click', () => {
+            console.log('Check API status button clicked');
             updateAPIStatus();
             GazeTracker.showStatusMessage('API status updated');
         });
@@ -454,7 +488,10 @@ function updateAPIStatus() {
         return;
     }
     
-    if (GazeTracker.isAPIAvailable()) {
+    const apiAvailable = GazeTracker.isAPIAvailable();
+    console.log('Updating API status display. API available:', apiAvailable);
+    
+    if (apiAvailable) {
         statusIndicator.style.backgroundColor = '#2ecc71'; // Green
         statusText.textContent = 'API Available';
         
@@ -709,3 +746,6 @@ function createErrorContainer() {
     
     return container;
 }
+
+// Make showError available globally for GazeTracker to use
+window.showError = showError;

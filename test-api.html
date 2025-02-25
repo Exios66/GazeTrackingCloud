@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GazeCloudAPI Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #2c3e50;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        #video-container {
+            width: 100%;
+            height: 300px;
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        #coordinates {
+            font-family: monospace;
+        }
+    </style>
+    
+    <!-- Load GazeCloudAPI directly -->
+    <script src="https://api.gazerecorder.com/GazeCloudAPI.js"></script>
+</head>
+<body>
+    <h1>GazeCloudAPI Test Page</h1>
+    
+    <div class="container">
+        <div class="card">
+            <h2>API Status</h2>
+            <div id="api-status" class="info">Checking API status...</div>
+            
+            <div class="button-group">
+                <button id="check-api">Check API Status</button>
+                <button id="load-api">Load API</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Webcam Feed</h2>
+            <div id="video-container">
+                <p>Your webcam feed will appear here</p>
+            </div>
+            
+            <div class="button-group">
+                <button id="start-tracking">Start Tracking</button>
+                <button id="stop-tracking">Stop Tracking</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Gaze Data</h2>
+            <div id="coordinates">
+                X: 0, Y: 0
+            </div>
+            <div id="status" class="info">No tracking data yet</div>
+        </div>
+    </div>
+    
+    <script>
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing test page...');
+            
+            // Check if GazeCloudAPI is available
+            setTimeout(checkAPIStatus, 1000);
+            
+            // Set up event listeners
+            document.getElementById('check-api').addEventListener('click', checkAPIStatus);
+            document.getElementById('load-api').addEventListener('click', loadAPI);
+            document.getElementById('start-tracking').addEventListener('click', startTracking);
+            document.getElementById('stop-tracking').addEventListener('click', stopTracking);
+        });
+        
+        // Check if GazeCloudAPI is available
+        function checkAPIStatus() {
+            const statusElement = document.getElementById('api-status');
+            
+            if (typeof GazeCloudAPI !== 'undefined') {
+                console.log('GazeCloudAPI is available');
+                statusElement.textContent = 'GazeCloudAPI is available';
+                statusElement.className = 'success';
+            } else {
+                console.log('GazeCloudAPI is not available');
+                statusElement.textContent = 'GazeCloudAPI is not available';
+                statusElement.className = 'error';
+            }
+        }
+        
+        // Load GazeCloudAPI
+        function loadAPI() {
+            const statusElement = document.getElementById('api-status');
+            statusElement.textContent = 'Loading GazeCloudAPI...';
+            statusElement.className = 'info';
+            
+            // Create script element
+            const script = document.createElement('script');
+            script.src = 'https://api.gazerecorder.com/GazeCloudAPI.js';
+            
+            // Set up load handler
+            script.onload = function() {
+                console.log('GazeCloudAPI loaded successfully');
+                statusElement.textContent = 'GazeCloudAPI loaded successfully';
+                statusElement.className = 'success';
+                
+                // Set up callbacks
+                setupCallbacks();
+            };
+            
+            // Set up error handler
+            script.onerror = function() {
+                console.error('Failed to load GazeCloudAPI');
+                statusElement.textContent = 'Failed to load GazeCloudAPI';
+                statusElement.className = 'error';
+            };
+            
+            // Add script to document
+            document.head.appendChild(script);
+        }
+        
+        // Set up GazeCloudAPI callbacks
+        function setupCallbacks() {
+            if (typeof GazeCloudAPI === 'undefined') {
+                console.error('GazeCloudAPI not available');
+                return;
+            }
+            
+            console.log('Setting up GazeCloudAPI callbacks');
+            
+            // Set up the callback for gaze data
+            GazeCloudAPI.OnResult = function(gazeData) {
+                // Update coordinates display
+                document.getElementById('coordinates').textContent = 
+                    `X: ${Math.round(gazeData.docX)}, Y: ${Math.round(gazeData.docY)}`;
+                
+                // Update status
+                const statusElement = document.getElementById('status');
+                statusElement.textContent = 'Receiving gaze data';
+                statusElement.className = 'success';
+            };
+            
+            // Set up additional callbacks
+            GazeCloudAPI.OnCalibrationComplete = function() {
+                console.log('Calibration completed');
+                const statusElement = document.getElementById('status');
+                statusElement.textContent = 'Calibration completed, tracking active';
+                statusElement.className = 'success';
+            };
+            
+            GazeCloudAPI.OnCamDenied = function() {
+                console.error('Camera access denied');
+                const statusElement = document.getElementById('status');
+                statusElement.textContent = 'Camera access denied';
+                statusElement.className = 'error';
+            };
+            
+            GazeCloudAPI.OnError = function(errorMessage) {
+                console.error('GazeCloudAPI error:', errorMessage);
+                const statusElement = document.getElementById('status');
+                statusElement.textContent = 'Error: ' + errorMessage;
+                statusElement.className = 'error';
+            };
+            
+            // Enable click recalibration
+            GazeCloudAPI.UseClickRecalibration = true;
+            
+            // Set up video feed container
+            GazeCloudAPI.SetFeedbackLink(null); // Remove feedback link
+        }
+        
+        // Start tracking
+        function startTracking() {
+            if (typeof GazeCloudAPI === 'undefined') {
+                alert('GazeCloudAPI not loaded. Please load the API first.');
+                return;
+            }
+            
+            try {
+                console.log('Starting eye tracking...');
+                
+                // Set the video container
+                const videoContainer = document.getElementById('video-container');
+                videoContainer.innerHTML = ''; // Clear any existing content
+                GazeCloudAPI.SetVideoContainerElement(videoContainer);
+                
+                // Start tracking
+                GazeCloudAPI.StartEyeTracking();
+                
+                // Update status
+                const statusElement = document.getElementById('status');
+                statusElement.textContent = 'Starting calibration...';
+                statusElement.className = 'info';
+            } catch (error) {
+                console.error('Error starting tracking:', error);
+                alert('Error starting tracking: ' + error.message);
+            }
+        }
+        
+        // Stop tracking
+        function stopTracking() {
+            if (typeof GazeCloudAPI === 'undefined') {
+                alert('GazeCloudAPI not loaded');
+                return;
+            }
+            
+            try {
+                console.log('Stopping eye tracking...');
+                
+                // Stop tracking
+                GazeCloudAPI.StopEyeTracking();
+                
+                // Update status
+                const statusElement = document.getElementById('status');
+                statusElement.textContent = 'Tracking stopped';
+                statusElement.className = 'info';
+                
+                // Reset video container
+                const videoContainer = document.getElementById('video-container');
+                videoContainer.innerHTML = '<p>Your webcam feed will appear here</p>';
+            } catch (error) {
+                console.error('Error stopping tracking:', error);
+                alert('Error stopping tracking: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html> 

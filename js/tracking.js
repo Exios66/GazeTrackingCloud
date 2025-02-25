@@ -30,6 +30,8 @@ const GazeTracker = (() => {
      * Initialize the tracker
      */
     const init = () => {
+        console.log('Initializing GazeTracker...');
+        
         // Get DOM elements
         gazeXElement = document.getElementById('gaze-x');
         gazeYElement = document.getElementById('gaze-y');
@@ -42,21 +44,37 @@ const GazeTracker = (() => {
         statusIndicator = document.getElementById('api-status-indicator');
         
         // Set up UI event listeners
-        document.getElementById('check-api-status').addEventListener('click', updateAPIStatusDisplay);
+        const checkApiStatusBtn = document.getElementById('check-api-status');
+        if (checkApiStatusBtn) {
+            checkApiStatusBtn.addEventListener('click', updateAPIStatusDisplay);
+        }
         
-        // Check if GazeCloudAPI is loaded
-        checkAndInitializeAPI();
+        // Wait for DOM to be fully loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                // Check if GazeCloudAPI is loaded
+                setTimeout(checkAndInitializeAPI, 1000); // Give it a second to load
+            });
+        } else {
+            // DOM already loaded, check API
+            setTimeout(checkAndInitializeAPI, 1000); // Give it a second to load
+        }
         
-        console.log('Gaze tracker initialized');
+        console.log('Gaze tracker initialization started');
     };
     
     /**
      * Check if GazeCloudAPI is loaded and initialize it
      */
     const checkAndInitializeAPI = () => {
+        console.log('Checking GazeCloudAPI availability...');
+        console.log('GazeCloudAPI defined?', typeof GazeCloudAPI !== 'undefined');
+        
         if (typeof GazeCloudAPI !== 'undefined') {
             // API is loaded, set up event listeners
             try {
+                console.log('GazeCloudAPI found, setting up callbacks...');
+                
                 // Set up the callback for gaze data
                 GazeCloudAPI.OnResult = handleGazeData;
                 
@@ -81,7 +99,7 @@ const GazeTracker = (() => {
                 return true;
             } catch (error) {
                 console.error('Error initializing GazeCloudAPI:', error);
-                showError('Error initializing GazeCloudAPI. Please refresh the page.');
+                showError('Error initializing GazeCloudAPI: ' + error.message);
                 return false;
             }
         } else {
@@ -99,7 +117,7 @@ const GazeTracker = (() => {
                     }).catch(error => {
                         console.error('Failed to load GazeCloudAPI:', error);
                         if (apiLoadAttempts >= MAX_API_LOAD_ATTEMPTS) {
-                            redirectToErrorPage();
+                            showError('Failed to load GazeCloudAPI after multiple attempts. Please refresh the page.');
                         } else {
                             checkAndInitializeAPI(); // Try again
                         }
@@ -108,7 +126,7 @@ const GazeTracker = (() => {
                 
                 return false;
             } else {
-                redirectToErrorPage();
+                showError('Failed to load GazeCloudAPI after multiple attempts. Please refresh the page.');
                 return false;
             }
         }
@@ -120,7 +138,14 @@ const GazeTracker = (() => {
     const updateAPIStatusDisplay = () => {
         const statusText = document.getElementById('api-status-text');
         
-        if (typeof GazeCloudAPI !== 'undefined') {
+        if (!statusIndicator || !statusText) {
+            console.error('Status elements not found');
+            return;
+        }
+        
+        console.log('Updating API status display. API available:', isAPIAvailable());
+        
+        if (isAPIAvailable()) {
             statusIndicator.style.backgroundColor = '#2ecc71'; // Green
             statusText.textContent = 'API Available';
             
@@ -141,19 +166,6 @@ const GazeTracker = (() => {
     };
     
     /**
-     * Redirect to the API error page
-     */
-    const redirectToErrorPage = () => {
-        showError('GazeCloudAPI could not be loaded. Redirecting to error page...');
-        // Save a flag in sessionStorage to indicate API loading failure
-        sessionStorage.setItem('gazecloud_api_failed', 'true');
-        // Redirect after a short delay to allow the error message to be seen
-        setTimeout(() => {
-            window.location.href = 'api-error.html';
-        }, 2000);
-    };
-    
-    /**
      * Load the GazeCloudAPI dynamically
      * @returns {Promise} - Resolves when the API is loaded
      */
@@ -165,6 +177,8 @@ const GazeTracker = (() => {
                 resolve();
                 return;
             }
+            
+            console.log('Attempting to load GazeCloudAPI dynamically...');
             
             // Create script element
             const script = document.createElement('script');
@@ -180,13 +194,14 @@ const GazeTracker = (() => {
             // Set up load handler
             script.onload = () => {
                 clearTimeout(timeoutId);
-                console.log('GazeCloudAPI loaded successfully');
+                console.log('GazeCloudAPI script loaded successfully');
                 
                 // Verify the API is actually available
                 if (typeof GazeCloudAPI !== 'undefined') {
+                    console.log('GazeCloudAPI object is available');
                     resolve();
                 } else {
-                    console.error('GazeCloudAPI loaded but not available');
+                    console.error('GazeCloudAPI script loaded but API object not available');
                     reject(new Error('GazeCloudAPI loaded but not available'));
                 }
             };
@@ -194,7 +209,7 @@ const GazeTracker = (() => {
             // Set up error handler
             script.onerror = () => {
                 clearTimeout(timeoutId);
-                console.error('Failed to load GazeCloudAPI');
+                console.error('Failed to load GazeCloudAPI script');
                 reject(new Error('Failed to load GazeCloudAPI'));
             };
             
@@ -213,14 +228,30 @@ const GazeTracker = (() => {
         }
         
         // Check if API is loaded
-        if (!checkAndInitializeAPI()) {
-            showError('GazeCloudAPI not loaded. Please wait for it to load or refresh the page.');
-            return;
+        if (!isAPIAvailable()) {
+            console.error('GazeCloudAPI not available, attempting to load...');
+            showError('GazeCloudAPI not loaded. Attempting to load it now...');
+            
+            try {
+                await loadGazeCloudAPI();
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a bit for API to initialize
+                if (!checkAndInitializeAPI()) {
+                    showError('Failed to initialize GazeCloudAPI. Please refresh the page.');
+                    return;
+                }
+            } catch (error) {
+                console.error('Failed to load GazeCloudAPI:', error);
+                showError('Failed to load GazeCloudAPI. Please refresh the page.');
+                return;
+            }
         }
         
         try {
+            console.log('Starting tracking session...');
+            
             // Create a new session in the database
             currentSessionId = await GazeDB.createSession();
+            console.log('Created session with ID:', currentSessionId);
             
             // Reset counters and data array
             dataPointsCount = 0;
@@ -238,10 +269,12 @@ const GazeTracker = (() => {
                     // Clear any existing content
                     videoContainer.innerHTML = '';
                     // Set the video container for GazeCloudAPI
+                    console.log('Setting video container for GazeCloudAPI');
                     GazeCloudAPI.SetVideoContainerElement(videoContainer);
                 }
                 
                 // Start tracking
+                console.log('Calling GazeCloudAPI.StartEyeTracking()');
                 GazeCloudAPI.StartEyeTracking();
                 
                 // Initialize heatmap
@@ -249,7 +282,7 @@ const GazeTracker = (() => {
                 GazeHeatmap.clear();
                 
                 isTracking = true;
-                console.log('Tracking started');
+                console.log('Tracking started successfully');
                 
                 // Update UI to reflect tracking state
                 updateTrackingUI(true);
@@ -257,12 +290,12 @@ const GazeTracker = (() => {
                 // Show status message
                 showStatusMessage('Tracking started. Look around the screen to generate data.');
             } else {
-                console.error('GazeCloudAPI not found');
+                console.error('GazeCloudAPI not found after loading attempt');
                 showError('GazeCloudAPI not found. Please refresh the page and try again.');
             }
         } catch (error) {
             console.error('Error starting tracking:', error);
-            showError('Failed to start tracking. Please try again.');
+            showError('Failed to start tracking: ' + error.message);
         }
     };
     
@@ -276,6 +309,8 @@ const GazeTracker = (() => {
         }
         
         try {
+            console.log('Stopping tracking...');
+            
             // Stop GazeCloudAPI
             if (typeof GazeCloudAPI !== 'undefined') {
                 GazeCloudAPI.StopEyeTracking();
@@ -289,7 +324,11 @@ const GazeTracker = (() => {
                 await GazeDB.endSession(currentSessionId, dataPointsCount);
                 
                 // Save data to server
-                await saveSessionToServer(currentSessionId, allGazeData);
+                try {
+                    await saveSessionToServer(currentSessionId, allGazeData);
+                } catch (error) {
+                    console.error('Error saving to server, continuing with local save:', error);
+                }
                 
                 // Generate and save CSV file
                 const csvData = generateCSV(allGazeData);
@@ -297,7 +336,7 @@ const GazeTracker = (() => {
             }
             
             isTracking = false;
-            console.log('Tracking stopped');
+            console.log('Tracking stopped successfully');
             
             // Update UI to reflect tracking state
             updateTrackingUI(false);
@@ -365,7 +404,7 @@ const GazeTracker = (() => {
         }
         
         // Check if API is loaded
-        if (!checkAndInitializeAPI()) {
+        if (!isAPIAvailable()) {
             showError('GazeCloudAPI not loaded. Please wait for it to load or refresh the page.');
             return;
         }
@@ -387,6 +426,7 @@ const GazeTracker = (() => {
         // GazeCloudAPI handles calibration automatically when starting tracking
         if (typeof GazeCloudAPI !== 'undefined') {
             isCalibrating = true;
+            console.log('Starting calibration...');
             GazeCloudAPI.StartEyeTracking();
             console.log('Calibration started');
             
@@ -622,6 +662,8 @@ const GazeTracker = (() => {
      * @param {string} message - The message to display
      */
     const showStatusMessage = (message) => {
+        console.log('Status message:', message);
+        
         // Create status message element if it doesn't exist
         let statusElement = document.getElementById('status-message');
         if (!statusElement) {
@@ -655,6 +697,8 @@ const GazeTracker = (() => {
      * @param {string} message - The error message to display
      */
     const showError = (message) => {
+        console.error('Error:', message);
+        
         // Use the app's showError function if available
         if (typeof window.showError === 'function') {
             window.showError(message, null, 'error');
