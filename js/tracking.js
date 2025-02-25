@@ -87,11 +87,12 @@ const GazeTracker = (() => {
                     showError(`GazeCloudAPI error: ${errorMessage}`);
                 };
                 
-                // Enable click recalibration
-                GazeCloudAPI.UseClickRecalibration = true;
+                // Enable click recalibration if available
+                if (typeof GazeCloudAPI.UseClickRecalibration !== 'undefined') {
+                    GazeCloudAPI.UseClickRecalibration = true;
+                }
                 
-                // Set up video feed container
-                GazeCloudAPI.SetFeedbackLink(null); // Remove feedback link
+                // No longer using SetFeedbackLink as it's not available
                 
                 console.log('GazeCloudAPI initialized successfully');
                 showStatusMessage('GazeCloudAPI loaded successfully. Click "Start Tracking" to begin.');
@@ -268,9 +269,28 @@ const GazeTracker = (() => {
                 if (videoContainer) {
                     // Clear any existing content
                     videoContainer.innerHTML = '';
-                    // Set the video container for GazeCloudAPI
+                    
+                    // Set the video container for GazeCloudAPI if the method exists
                     console.log('Setting video container for GazeCloudAPI');
-                    GazeCloudAPI.SetVideoContainerElement(videoContainer);
+                    if (typeof GazeCloudAPI.SetVideoContainerElement === 'function') {
+                        GazeCloudAPI.SetVideoContainerElement(videoContainer);
+                    } else {
+                        console.warn('GazeCloudAPI.SetVideoContainerElement is not available');
+                        
+                        // Create a message to inform the user
+                        const message = document.createElement('div');
+                        message.className = 'api-message';
+                        message.textContent = 'Calibration will appear in a separate window. Please follow the instructions there.';
+                        message.style.padding = '10px';
+                        message.style.backgroundColor = '#f8f9fa';
+                        message.style.border = '1px solid #dee2e6';
+                        message.style.borderRadius = '4px';
+                        message.style.marginBottom = '10px';
+                        videoContainer.appendChild(message);
+                        
+                        // Create an observer to watch for when GazeCloudAPI adds video elements to the body
+                        setupVideoObserver();
+                    }
                 }
                 
                 // Start tracking
@@ -300,6 +320,60 @@ const GazeTracker = (() => {
     };
     
     /**
+     * Set up an observer to watch for video elements added by GazeCloudAPI
+     */
+    const setupVideoObserver = () => {
+        // Create a MutationObserver to watch for changes to the DOM
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+                    for (let i = 0; i < mutation.addedNodes.length; i++) {
+                        const node = mutation.addedNodes[i];
+                        
+                        // Check if the added node is a video element or contains video elements
+                        if (node.nodeName === 'VIDEO' || (node.querySelector && node.querySelector('video'))) {
+                            const videoElement = node.nodeName === 'VIDEO' ? node : node.querySelector('video');
+                            
+                            if (videoElement && videoContainer) {
+                                console.log('Found video element added by GazeCloudAPI');
+                                
+                                // Clone the video element
+                                const clonedVideo = videoElement.cloneNode(true);
+                                
+                                // Style the cloned video
+                                clonedVideo.style.width = '100%';
+                                clonedVideo.style.height = 'auto';
+                                clonedVideo.style.borderRadius = '8px';
+                                
+                                // Clear the container and add the cloned video
+                                videoContainer.innerHTML = '';
+                                videoContainer.appendChild(clonedVideo);
+                                
+                                // Add recording indicator
+                                const recordingIndicator = document.createElement('div');
+                                recordingIndicator.className = 'recording-indicator';
+                                videoContainer.appendChild(recordingIndicator);
+                                
+                                // We found what we were looking for, so disconnect the observer
+                                observer.disconnect();
+                            }
+                        }
+                    }
+                }
+            });
+        });
+        
+        // Start observing the document body for changes
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
+        // Store the observer so we can disconnect it later if needed
+        window.gazeVideoObserver = observer;
+    };
+    
+    /**
      * Stop tracking
      */
     const stopTracking = async () => {
@@ -319,6 +393,12 @@ const GazeTracker = (() => {
             // Stop duration timer
             clearInterval(durationInterval);
             
+            // Disconnect video observer if it exists
+            if (window.gazeVideoObserver) {
+                window.gazeVideoObserver.disconnect();
+                window.gazeVideoObserver = null;
+            }
+            
             // End session in database
             if (currentSessionId) {
                 await GazeDB.endSession(currentSessionId, dataPointsCount);
@@ -330,9 +410,17 @@ const GazeTracker = (() => {
                     console.error('Error saving to server, continuing with local save:', error);
                 }
                 
-                // Generate and save CSV file
+                // Generate and save CSV file with improved formatting
                 const csvData = generateCSV(allGazeData);
-                saveCSVLocally(csvData, `gaze_data_session_${currentSessionId}.csv`);
+                
+                // Format date for filename
+                const now = new Date();
+                const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+                const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-'); // HH-MM-SS
+                
+                // Save CSV file with better filename
+                const filename = `gaze_data_session_${currentSessionId}_${dateStr}_${timeStr}.csv`;
+                saveCSVLocally(csvData, filename);
             }
             
             isTracking = false;
@@ -419,8 +507,27 @@ const GazeTracker = (() => {
         if (videoContainer) {
             // Clear any existing content
             videoContainer.innerHTML = '';
-            // Set the video container for GazeCloudAPI
-            GazeCloudAPI.SetVideoContainerElement(videoContainer);
+            
+            // Set the video container for GazeCloudAPI if the method exists
+            if (typeof GazeCloudAPI.SetVideoContainerElement === 'function') {
+                GazeCloudAPI.SetVideoContainerElement(videoContainer);
+            } else {
+                console.warn('GazeCloudAPI.SetVideoContainerElement is not available');
+                
+                // Create a message to inform the user
+                const message = document.createElement('div');
+                message.className = 'api-message';
+                message.textContent = 'Calibration will appear in a separate window. Please follow the instructions there.';
+                message.style.padding = '10px';
+                message.style.backgroundColor = '#f8f9fa';
+                message.style.border = '1px solid #dee2e6';
+                message.style.borderRadius = '4px';
+                message.style.marginBottom = '10px';
+                videoContainer.appendChild(message);
+                
+                // Set up observer to watch for video elements
+                setupVideoObserver();
+            }
         }
         
         // GazeCloudAPI handles calibration automatically when starting tracking
@@ -566,23 +673,72 @@ const GazeTracker = (() => {
             return 'No data available';
         }
         
-        // CSV header
-        const headers = ['timestamp', 'gazeX', 'gazeY', 'gazeState'];
+        // CSV header with more descriptive column names
+        const headers = [
+            'unix_timestamp',
+            'date_time',
+            'elapsed_time',
+            'gaze_x',
+            'gaze_y',
+            'gaze_state',
+            'session_id'
+        ];
         
-        // Create CSV content
+        // Get session start time for calculating elapsed time
+        const sessionStartTime = gazeData[0].timestamp;
+        
+        // Create CSV content with improved formatting
         const csvContent = [
             headers.join(','),
-            ...gazeData.map(data => {
+            ...gazeData.map((data, index) => {
+                // Calculate elapsed time from session start
+                const elapsedMs = data.timestamp - sessionStartTime;
+                const elapsedSec = Math.floor(elapsedMs / 1000);
+                const hours = Math.floor(elapsedSec / 3600).toString().padStart(2, '0');
+                const minutes = Math.floor((elapsedSec % 3600) / 60).toString().padStart(2, '0');
+                const seconds = (elapsedSec % 60).toString().padStart(2, '0');
+                const milliseconds = (elapsedMs % 1000).toString().padStart(3, '0');
+                const elapsedFormatted = `${hours}:${minutes}:${seconds}.${milliseconds}`;
+                
+                // Format date and time
+                const date = new Date(data.timestamp);
+                const dateFormatted = date.toISOString();
+                
                 return [
-                    data.timestamp,
-                    data.gazeX,
-                    data.gazeY,
-                    data.gazeState
+                    data.timestamp,                      // Unix timestamp (milliseconds)
+                    dateFormatted,                       // ISO date format (YYYY-MM-DDTHH:MM:SS.sssZ)
+                    elapsedFormatted,                    // Elapsed time (HH:MM:SS.mmm)
+                    data.gazeX.toFixed(2),               // Gaze X coordinate with 2 decimal places
+                    data.gazeY.toFixed(2),               // Gaze Y coordinate with 2 decimal places
+                    getGazeStateDescription(data.gazeState), // Descriptive gaze state
+                    currentSessionId                     // Session ID
                 ].join(',');
             })
         ].join('\n');
         
         return csvContent;
+    };
+    
+    /**
+     * Get descriptive text for gaze state value
+     * @param {number} state - The gaze state value
+     * @returns {string} - Descriptive text
+     */
+    const getGazeStateDescription = (state) => {
+        switch (state) {
+            case 0:
+                return 'Valid';
+            case 1:
+                return 'Invalid';
+            case 2:
+                return 'Calibrating';
+            case 3:
+                return 'Tracking Paused';
+            case 4:
+                return 'Tracking Resumed';
+            default:
+                return `Unknown (${state})`;
+        }
     };
     
     /**
@@ -769,8 +925,13 @@ const GazeTracker = (() => {
             // Generate CSV
             const csvData = generateCSV(dataToExport);
             
-            // Save CSV file
-            const filename = `gaze_data_session_${currentSessionId || Date.now()}.csv`;
+            // Format date for filename
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+            const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-'); // HH-MM-SS
+            
+            // Save CSV file with better filename
+            const filename = `gaze_data_session_${currentSessionId}_${dateStr}_${timeStr}.csv`;
             saveCSVLocally(csvData, filename);
             
             showStatusMessage(`Data exported as ${filename}`);

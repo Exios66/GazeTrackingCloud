@@ -1,12 +1,13 @@
 /**
  * Heatmap module for GazeTrackingCloud
- * Handles generation and display of gaze heatmaps
+ * Handles visualization of gaze data as heatmaps
  */
 
 const GazeHeatmap = (() => {
     let heatmapInstance = null;
     let container = null;
-    let gazePoints = [];
+    let isVisible = false;
+    let pointsAdded = 0;
     
     /**
      * Initialize the heatmap
@@ -14,12 +15,13 @@ const GazeHeatmap = (() => {
      */
     const init = (containerId) => {
         container = document.getElementById(containerId);
+        
         if (!container) {
-            console.error(`Container element with ID ${containerId} not found`);
+            console.error(`Heatmap container with ID "${containerId}" not found`);
             return;
         }
         
-        // Configure and create heatmap instance
+        // Configure heatmap
         const config = {
             container,
             radius: 40,
@@ -27,13 +29,24 @@ const GazeHeatmap = (() => {
             minOpacity: 0,
             blur: 0.75,
             gradient: {
-                '.5': 'blue',
-                '.8': 'red',
-                '.95': 'white'
+                '.1': 'blue',
+                '.3': 'green',
+                '.5': 'yellow',
+                '.7': 'orange',
+                '.9': 'red'
             }
         };
         
+        // Create heatmap instance
         heatmapInstance = h337.create(config);
+        
+        // Set initial data
+        heatmapInstance.setData({
+            max: 10,
+            min: 0,
+            data: []
+        });
+        
         console.log('Heatmap initialized');
     };
     
@@ -41,7 +54,7 @@ const GazeHeatmap = (() => {
      * Add a gaze point to the heatmap
      * @param {number} x - The x coordinate
      * @param {number} y - The y coordinate
-     * @param {number} value - The intensity value (optional, defaults to 1)
+     * @param {number} value - The value (intensity) of the point
      */
     const addGazePoint = (x, y, value = 1) => {
         if (!heatmapInstance) {
@@ -49,24 +62,81 @@ const GazeHeatmap = (() => {
             return;
         }
         
-        // Ensure coordinates are within the container bounds
-        const rect = container.getBoundingClientRect();
-        if (x < 0 || x > rect.width || y < 0 || y > rect.height) {
-            return; // Skip points outside the container
-        }
-        
-        const dataPoint = {
+        // Add point to heatmap
+        heatmapInstance.addData({
             x: Math.round(x),
             y: Math.round(y),
             value
-        };
+        });
         
-        gazePoints.push(dataPoint);
-        heatmapInstance.addData(dataPoint);
+        pointsAdded++;
+        
+        // Update heatmap every 10 points to avoid performance issues
+        if (pointsAdded % 10 === 0 && isVisible) {
+            heatmapInstance.repaint();
+        }
     };
     
     /**
-     * Clear the heatmap
+     * Generate heatmap from data array
+     * @param {Array} data - Array of data points with x, y, and value properties
+     */
+    const generateFromData = (data) => {
+        if (!heatmapInstance) {
+            console.error('Heatmap not initialized');
+            return;
+        }
+        
+        // Clear existing data
+        clear();
+        
+        // Set new data
+        heatmapInstance.setData({
+            max: 10,
+            min: 0,
+            data
+        });
+        
+        console.log(`Heatmap generated from ${data.length} data points`);
+    };
+    
+    /**
+     * Show the heatmap
+     */
+    const show = () => {
+        if (!container) {
+            console.error('Heatmap container not found');
+            return;
+        }
+        
+        container.classList.remove('hidden');
+        isVisible = true;
+        
+        // Force repaint to ensure heatmap is visible
+        if (heatmapInstance) {
+            heatmapInstance.repaint();
+        }
+        
+        console.log('Heatmap shown');
+    };
+    
+    /**
+     * Hide the heatmap
+     */
+    const hide = () => {
+        if (!container) {
+            console.error('Heatmap container not found');
+            return;
+        }
+        
+        container.classList.add('hidden');
+        isVisible = false;
+        
+        console.log('Heatmap hidden');
+    };
+    
+    /**
+     * Clear the heatmap data
      */
     const clear = () => {
         if (!heatmapInstance) {
@@ -74,93 +144,198 @@ const GazeHeatmap = (() => {
             return;
         }
         
-        heatmapInstance.setData({ data: [] });
-        gazePoints = [];
-    };
-    
-    /**
-     * Generate a heatmap from an array of gaze data
-     * @param {Array} gazeData - Array of gaze data objects
-     */
-    const generateFromData = (gazeData) => {
-        if (!heatmapInstance) {
-            console.error('Heatmap not initialized');
-            return;
-        }
-        
-        clear();
-        
-        // Get container dimensions
-        const rect = container.getBoundingClientRect();
-        const containerWidth = rect.width;
-        const containerHeight = rect.height;
-        
-        // Process each gaze data point
-        gazeData.forEach(data => {
-            // Convert normalized coordinates to container coordinates if needed
-            let x, y;
-            
-            if (data.x >= 0 && data.x <= 1 && data.y >= 0 && data.y <= 1) {
-                // Normalized coordinates (0-1)
-                x = data.x * containerWidth;
-                y = data.y * containerHeight;
-            } else {
-                // Absolute coordinates
-                x = data.x;
-                y = data.y;
-            }
-            
-            addGazePoint(x, y, data.value || 1);
+        heatmapInstance.setData({
+            max: 10,
+            min: 0,
+            data: []
         });
+        
+        pointsAdded = 0;
+        
+        console.log('Heatmap cleared');
     };
     
     /**
-     * Show the heatmap container
-     */
-    const show = () => {
-        if (container) {
-            container.classList.remove('hidden');
-        }
-    };
-    
-    /**
-     * Hide the heatmap container
-     */
-    const hide = () => {
-        if (container) {
-            container.classList.add('hidden');
-        }
-    };
-    
-    /**
-     * Export the heatmap as an image
+     * Export heatmap as an image
      * @returns {string} - Data URL of the heatmap image
      */
     const exportAsImage = () => {
+        if (!heatmapInstance || !container) {
+            console.error('Heatmap not initialized');
+            return null;
+        }
+        
+        try {
+            // Make sure the heatmap is visible for export
+            const wasHidden = container.classList.contains('hidden');
+            if (wasHidden) {
+                container.classList.remove('hidden');
+            }
+            
+            // Force repaint to ensure heatmap is rendered
+            heatmapInstance.repaint();
+            
+            // Create a canvas element to draw the heatmap
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas dimensions to match container
+            canvas.width = container.offsetWidth;
+            canvas.height = container.offsetHeight;
+            
+            // Draw background
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw heatmap
+            const heatmapCanvas = container.querySelector('canvas');
+            if (heatmapCanvas) {
+                ctx.drawImage(heatmapCanvas, 0, 0);
+            }
+            
+            // Add title and timestamp
+            ctx.fillStyle = 'black';
+            ctx.font = '16px Arial';
+            ctx.fillText('Gaze Heatmap', 10, 20);
+            
+            const timestamp = new Date().toISOString();
+            ctx.font = '12px Arial';
+            ctx.fillText(`Generated: ${timestamp}`, 10, 40);
+            
+            // Add session info if available
+            if (typeof GazeTracker !== 'undefined' && GazeTracker.getCurrentSessionId) {
+                const sessionId = GazeTracker.getCurrentSessionId();
+                if (sessionId) {
+                    ctx.fillText(`Session ID: ${sessionId}`, 10, 60);
+                }
+            }
+            
+            // Convert canvas to data URL
+            const dataUrl = canvas.toDataURL('image/png');
+            
+            // Restore visibility state
+            if (wasHidden) {
+                container.classList.add('hidden');
+            }
+            
+            console.log('Heatmap exported as image');
+            return dataUrl;
+        } catch (error) {
+            console.error('Error exporting heatmap as image:', error);
+            return null;
+        }
+    };
+    
+    /**
+     * Save heatmap as an image file
+     */
+    const saveAsImage = () => {
+        const dataUrl = exportAsImage();
+        if (!dataUrl) {
+            console.error('Failed to export heatmap as image');
+            return;
+        }
+        
+        // Format date for filename
+        const now = new Date();
+        const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+        const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-'); // HH-MM-SS
+        
+        // Create session ID part of filename
+        let sessionPart = '';
+        if (typeof GazeTracker !== 'undefined' && GazeTracker.getCurrentSessionId) {
+            const sessionId = GazeTracker.getCurrentSessionId();
+            if (sessionId) {
+                sessionPart = `_session_${sessionId}`;
+            }
+        }
+        
+        // Create filename
+        const filename = `gaze_heatmap${sessionPart}_${dateStr}_${timeStr}.png`;
+        
+        // Create download link
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = filename;
+        link.style.display = 'none';
+        
+        // Add to document, click, and remove
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        console.log(`Heatmap saved as ${filename}`);
+        
+        // Show success message if GazeTracker is available
+        if (typeof GazeTracker !== 'undefined' && GazeTracker.showStatusMessage) {
+            GazeTracker.showStatusMessage(`Heatmap saved as ${filename}`);
+        }
+    };
+    
+    /**
+     * Generate a summary of the heatmap data
+     * @returns {Object} - Summary object with statistics
+     */
+    const generateSummary = () => {
         if (!heatmapInstance) {
             console.error('Heatmap not initialized');
             return null;
         }
         
-        return heatmapInstance.getDataURL();
-    };
-    
-    /**
-     * Get all gaze points
-     * @returns {Array} - Array of gaze points
-     */
-    const getGazePoints = () => {
-        return [...gazePoints];
+        try {
+            const data = heatmapInstance.getData();
+            if (!data || !data.data || data.data.length === 0) {
+                return {
+                    pointCount: 0,
+                    averageValue: 0,
+                    maxValue: 0,
+                    minValue: 0,
+                    coverage: 0
+                };
+            }
+            
+            // Calculate statistics
+            const pointCount = data.data.length;
+            let totalValue = 0;
+            let maxValue = 0;
+            let minValue = Infinity;
+            
+            // Calculate total value, max, and min
+            data.data.forEach(point => {
+                totalValue += point.value;
+                maxValue = Math.max(maxValue, point.value);
+                minValue = Math.min(minValue, point.value);
+            });
+            
+            const averageValue = totalValue / pointCount;
+            
+            // Calculate coverage (percentage of screen area with gaze points)
+            const containerArea = container.offsetWidth * container.offsetHeight;
+            const pointArea = Math.PI * Math.pow(data.radius, 2) * pointCount;
+            const coverage = Math.min(100, (pointArea / containerArea) * 100);
+            
+            return {
+                pointCount,
+                averageValue,
+                maxValue,
+                minValue,
+                coverage
+            };
+        } catch (error) {
+            console.error('Error generating heatmap summary:', error);
+            return null;
+        }
     };
     
     return {
         init,
         addGazePoint,
-        clear,
         generateFromData,
         show,
         hide,
+        clear,
         exportAsImage,
-        getGazePoints
+        saveAsImage,
+        generateSummary
     };
 })(); 

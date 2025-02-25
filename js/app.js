@@ -291,10 +291,23 @@ function setupEventListeners() {
                 if (heatmapContainer.classList.contains('hidden')) {
                     showHeatmapBtn.textContent = 'Generating...';
                     await GazeTracker.showHeatmap();
+                    
+                    // Add heatmap controls if they don't exist
+                    addHeatmapControls(heatmapContainer);
+                    
+                    // Display heatmap summary
+                    displayHeatmapSummary();
+                    
                     showHeatmapBtn.textContent = 'Hide Heatmap';
                 } else {
                     GazeTracker.hideHeatmap();
                     showHeatmapBtn.textContent = 'Show Heatmap';
+                    
+                    // Hide summary
+                    const summaryElement = document.getElementById('heatmap-summary');
+                    if (summaryElement) {
+                        summaryElement.classList.add('hidden');
+                    }
                 }
             } catch (error) {
                 console.error('Error with heatmap:', error);
@@ -309,130 +322,7 @@ function setupEventListeners() {
     // Export data button
     const exportDataBtn = document.getElementById('export-data');
     if (exportDataBtn) {
-        exportDataBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            
-            try {
-                const sessionId = GazeTracker.getCurrentSessionId();
-                
-                // Show export options
-                const exportOptions = document.createElement('div');
-                exportOptions.className = 'export-options';
-                exportOptions.style.position = 'absolute';
-                exportOptions.style.top = `${e.clientY + 10}px`;
-                exportOptions.style.left = `${e.clientX}px`;
-                exportOptions.style.backgroundColor = 'white';
-                exportOptions.style.border = '1px solid #ccc';
-                exportOptions.style.borderRadius = '4px';
-                exportOptions.style.padding = '10px';
-                exportOptions.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
-                exportOptions.style.zIndex = '1000';
-                
-                const csvOption = document.createElement('button');
-                csvOption.textContent = 'Export as CSV';
-                csvOption.style.display = 'block';
-                csvOption.style.width = '100%';
-                csvOption.style.padding = '8px';
-                csvOption.style.marginBottom = '5px';
-                csvOption.style.backgroundColor = '#3498db';
-                csvOption.style.color = 'white';
-                csvOption.style.border = 'none';
-                csvOption.style.borderRadius = '4px';
-                csvOption.style.cursor = 'pointer';
-                
-                const jsonOption = document.createElement('button');
-                jsonOption.textContent = 'Export as JSON';
-                jsonOption.style.display = 'block';
-                jsonOption.style.width = '100%';
-                jsonOption.style.padding = '8px';
-                jsonOption.style.backgroundColor = '#3498db';
-                jsonOption.style.color = 'white';
-                jsonOption.style.border = 'none';
-                jsonOption.style.borderRadius = '4px';
-                jsonOption.style.cursor = 'pointer';
-                
-                exportOptions.appendChild(csvOption);
-                exportOptions.appendChild(jsonOption);
-                document.body.appendChild(exportOptions);
-                
-                // Close options when clicking outside
-                const closeOptions = (event) => {
-                    if (!exportOptions.contains(event.target) && event.target !== exportDataBtn) {
-                        document.body.removeChild(exportOptions);
-                        document.removeEventListener('click', closeOptions);
-                    }
-                };
-                
-                // Add a small delay before adding the event listener to prevent immediate closing
-                setTimeout(() => {
-                    document.addEventListener('click', closeOptions);
-                }, 100);
-                
-                // CSV export
-                csvOption.addEventListener('click', async () => {
-                    document.body.removeChild(exportOptions);
-                    document.removeEventListener('click', closeOptions);
-                    
-                    exportDataBtn.textContent = 'Exporting CSV...';
-                    exportDataBtn.classList.add('disabled');
-                    
-                    try {
-                        await GazeTracker.exportCSV();
-                        GazeTracker.showStatusMessage('CSV data exported successfully');
-                    } catch (error) {
-                        console.error('Error exporting CSV:', error);
-                        GazeTracker.showError('Failed to export CSV: ' + error.message);
-                    } finally {
-                        exportDataBtn.textContent = 'Export Data';
-                        exportDataBtn.classList.remove('disabled');
-                    }
-                });
-                
-                // JSON export
-                jsonOption.addEventListener('click', async () => {
-                    document.body.removeChild(exportOptions);
-                    document.removeEventListener('click', closeOptions);
-                    
-                    exportDataBtn.textContent = 'Exporting JSON...';
-                    exportDataBtn.classList.add('disabled');
-                    
-                    try {
-                        if (!sessionId) {
-                            GazeTracker.showError('No active session to export');
-                            return;
-                        }
-                        
-                        const jsonData = await GazeTracker.exportSessionData();
-                        if (!jsonData) {
-                            GazeTracker.showError('No data to export');
-                            return;
-                        }
-                        
-                        // Create download link
-                        const blob = new Blob([jsonData], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `gaze-data-session-${sessionId}.json`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                        
-                        GazeTracker.showStatusMessage('JSON data exported successfully');
-                    } catch (error) {
-                        console.error('Error exporting JSON:', error);
-                        GazeTracker.showError('Failed to export JSON: ' + error.message);
-                    } finally {
-                        exportDataBtn.textContent = 'Export Data';
-                        exportDataBtn.classList.remove('disabled');
-                    }
-                });
-            } catch (error) {
-                console.error('Error showing export options:', error);
-                GazeTracker.showError('Failed to show export options: ' + error.message);
-            }
-        });
+        exportDataBtn.addEventListener('click', handleExportData);
     } else {
         console.error('Export data button not found in the DOM');
     }
@@ -745,6 +635,303 @@ function createErrorContainer() {
     document.body.appendChild(container);
     
     return container;
+}
+
+/**
+ * Add controls to the heatmap container
+ * @param {HTMLElement} container - The heatmap container element
+ */
+function addHeatmapControls(container) {
+    // Check if controls already exist
+    if (document.getElementById('heatmap-controls')) {
+        return;
+    }
+    
+    // Create controls container
+    const controls = document.createElement('div');
+    controls.id = 'heatmap-controls';
+    controls.style.position = 'absolute';
+    controls.style.top = '10px';
+    controls.style.right = '10px';
+    controls.style.zIndex = '100';
+    controls.style.display = 'flex';
+    controls.style.gap = '10px';
+    
+    // Create export button
+    const exportBtn = document.createElement('button');
+    exportBtn.textContent = 'Export as Image';
+    exportBtn.className = 'heatmap-btn';
+    exportBtn.style.backgroundColor = '#3498db';
+    exportBtn.style.color = 'white';
+    exportBtn.style.border = 'none';
+    exportBtn.style.borderRadius = '4px';
+    exportBtn.style.padding = '5px 10px';
+    exportBtn.style.cursor = 'pointer';
+    exportBtn.style.fontSize = '14px';
+    
+    // Add click event to export button
+    exportBtn.addEventListener('click', () => {
+        try {
+            GazeHeatmap.saveAsImage();
+        } catch (error) {
+            console.error('Error exporting heatmap:', error);
+            GazeTracker.showError('Failed to export heatmap: ' + error.message);
+        }
+    });
+    
+    // Add buttons to controls
+    controls.appendChild(exportBtn);
+    
+    // Add controls to container
+    container.appendChild(controls);
+    
+    // Create summary container if it doesn't exist
+    if (!document.getElementById('heatmap-summary')) {
+        const summary = document.createElement('div');
+        summary.id = 'heatmap-summary';
+        summary.style.position = 'absolute';
+        summary.style.bottom = '10px';
+        summary.style.left = '10px';
+        summary.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+        summary.style.padding = '10px';
+        summary.style.borderRadius = '4px';
+        summary.style.maxWidth = '300px';
+        summary.style.fontSize = '14px';
+        summary.style.zIndex = '100';
+        
+        container.appendChild(summary);
+    }
+}
+
+/**
+ * Display a summary of the heatmap data
+ */
+function displayHeatmapSummary() {
+    const summaryElement = document.getElementById('heatmap-summary');
+    if (!summaryElement) {
+        return;
+    }
+    
+    try {
+        const summary = GazeHeatmap.generateSummary();
+        if (!summary) {
+            summaryElement.textContent = 'No heatmap data available';
+            return;
+        }
+        
+        // Format the summary data
+        const { pointCount, averageValue, maxValue, coverage } = summary;
+        
+        // Create summary HTML
+        summaryElement.innerHTML = `
+            <h3 style="margin-top: 0; margin-bottom: 10px;">Gaze Data Summary</h3>
+            <p><strong>Data Points:</strong> ${pointCount.toLocaleString()}</p>
+            <p><strong>Average Intensity:</strong> ${averageValue.toFixed(2)}</p>
+            <p><strong>Max Intensity:</strong> ${maxValue.toFixed(2)}</p>
+            <p><strong>Coverage:</strong> ${coverage.toFixed(2)}%</p>
+            <p><strong>Session ID:</strong> ${GazeTracker.getCurrentSessionId() || 'N/A'}</p>
+        `;
+        
+        summaryElement.classList.remove('hidden');
+    } catch (error) {
+        console.error('Error displaying heatmap summary:', error);
+        summaryElement.textContent = 'Error generating summary';
+    }
+}
+
+/**
+ * Export data button event handler
+ * @param {Event} e - The click event
+ */
+function handleExportData(e) {
+    e.preventDefault();
+    
+    try {
+        const sessionId = GazeTracker.getCurrentSessionId();
+        
+        // Show export options
+        const exportOptions = document.createElement('div');
+        exportOptions.className = 'export-options';
+        exportOptions.style.position = 'absolute';
+        exportOptions.style.top = `${e.clientY + 10}px`;
+        exportOptions.style.left = `${e.clientX}px`;
+        exportOptions.style.backgroundColor = 'white';
+        exportOptions.style.border = '1px solid #ccc';
+        exportOptions.style.borderRadius = '4px';
+        exportOptions.style.padding = '10px';
+        exportOptions.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+        exportOptions.style.zIndex = '1000';
+        
+        const csvOption = document.createElement('button');
+        csvOption.textContent = 'Export as CSV';
+        csvOption.style.display = 'block';
+        csvOption.style.width = '100%';
+        csvOption.style.padding = '8px';
+        csvOption.style.marginBottom = '5px';
+        csvOption.style.backgroundColor = '#3498db';
+        csvOption.style.color = 'white';
+        csvOption.style.border = 'none';
+        csvOption.style.borderRadius = '4px';
+        csvOption.style.cursor = 'pointer';
+        
+        const jsonOption = document.createElement('button');
+        jsonOption.textContent = 'Export as JSON';
+        jsonOption.style.display = 'block';
+        jsonOption.style.width = '100%';
+        jsonOption.style.padding = '8px';
+        jsonOption.style.marginBottom = '5px';
+        jsonOption.style.backgroundColor = '#3498db';
+        jsonOption.style.color = 'white';
+        jsonOption.style.border = 'none';
+        jsonOption.style.borderRadius = '4px';
+        jsonOption.style.cursor = 'pointer';
+        
+        const heatmapOption = document.createElement('button');
+        heatmapOption.textContent = 'Export Heatmap';
+        heatmapOption.style.display = 'block';
+        heatmapOption.style.width = '100%';
+        heatmapOption.style.padding = '8px';
+        heatmapOption.style.backgroundColor = '#3498db';
+        heatmapOption.style.color = 'white';
+        heatmapOption.style.border = 'none';
+        heatmapOption.style.borderRadius = '4px';
+        heatmapOption.style.cursor = 'pointer';
+        
+        exportOptions.appendChild(csvOption);
+        exportOptions.appendChild(jsonOption);
+        exportOptions.appendChild(heatmapOption);
+        document.body.appendChild(exportOptions);
+        
+        // Close options when clicking outside
+        const closeOptions = (event) => {
+            if (!exportOptions.contains(event.target) && event.target !== e.target) {
+                document.body.removeChild(exportOptions);
+                document.removeEventListener('click', closeOptions);
+            }
+        };
+        
+        // Add a small delay before adding the event listener to prevent immediate closing
+        setTimeout(() => {
+            document.addEventListener('click', closeOptions);
+        }, 100);
+        
+        // CSV export
+        csvOption.addEventListener('click', async () => {
+            document.body.removeChild(exportOptions);
+            document.removeEventListener('click', closeOptions);
+            
+            const exportBtn = document.getElementById('export-data');
+            if (exportBtn) {
+                exportBtn.textContent = 'Exporting CSV...';
+                exportBtn.classList.add('disabled');
+            }
+            
+            try {
+                await GazeTracker.exportCSV();
+                GazeTracker.showStatusMessage('CSV data exported successfully');
+            } catch (error) {
+                console.error('Error exporting CSV:', error);
+                GazeTracker.showError('Failed to export CSV: ' + error.message);
+            } finally {
+                if (exportBtn) {
+                    exportBtn.textContent = 'Export Data';
+                    exportBtn.classList.remove('disabled');
+                }
+            }
+        });
+        
+        // JSON export
+        jsonOption.addEventListener('click', async () => {
+            document.body.removeChild(exportOptions);
+            document.removeEventListener('click', closeOptions);
+            
+            const exportBtn = document.getElementById('export-data');
+            if (exportBtn) {
+                exportBtn.textContent = 'Exporting JSON...';
+                exportBtn.classList.add('disabled');
+            }
+            
+            try {
+                if (!sessionId) {
+                    GazeTracker.showError('No active session to export');
+                    return;
+                }
+                
+                const jsonData = await GazeTracker.exportSessionData();
+                if (!jsonData) {
+                    GazeTracker.showError('No data to export');
+                    return;
+                }
+                
+                // Format date for filename
+                const now = new Date();
+                const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+                const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-'); // HH-MM-SS
+                
+                // Create download link
+                const blob = new Blob([jsonData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `gaze_data_session_${sessionId}_${dateStr}_${timeStr}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                GazeTracker.showStatusMessage('JSON data exported successfully');
+            } catch (error) {
+                console.error('Error exporting JSON:', error);
+                GazeTracker.showError('Failed to export JSON: ' + error.message);
+            } finally {
+                if (exportBtn) {
+                    exportBtn.textContent = 'Export Data';
+                    exportBtn.classList.remove('disabled');
+                }
+            }
+        });
+        
+        // Heatmap export
+        heatmapOption.addEventListener('click', () => {
+            document.body.removeChild(exportOptions);
+            document.removeEventListener('click', closeOptions);
+            
+            const exportBtn = document.getElementById('export-data');
+            if (exportBtn) {
+                exportBtn.textContent = 'Exporting Heatmap...';
+                exportBtn.classList.add('disabled');
+            }
+            
+            try {
+                // Show heatmap if it's not already visible
+                const heatmapContainer = document.getElementById('heatmap-container');
+                const wasHidden = heatmapContainer && heatmapContainer.classList.contains('hidden');
+                
+                if (wasHidden) {
+                    GazeTracker.showHeatmap();
+                }
+                
+                // Export heatmap as image
+                GazeHeatmap.saveAsImage();
+                
+                // Hide heatmap again if it was hidden before
+                if (wasHidden) {
+                    GazeTracker.hideHeatmap();
+                }
+            } catch (error) {
+                console.error('Error exporting heatmap:', error);
+                GazeTracker.showError('Failed to export heatmap: ' + error.message);
+            } finally {
+                if (exportBtn) {
+                    exportBtn.textContent = 'Export Data';
+                    exportBtn.classList.remove('disabled');
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error showing export options:', error);
+        GazeTracker.showError('Failed to show export options: ' + error.message);
+    }
 }
 
 // Make showError available globally for GazeTracker to use

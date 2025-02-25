@@ -83,6 +83,23 @@
         #coordinates {
             font-family: monospace;
         }
+        
+        .recording-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #e74c3c;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
     </style>
     
     <!-- Load GazeCloudAPI directly -->
@@ -227,11 +244,65 @@
                 statusElement.className = 'error';
             };
             
-            // Enable click recalibration
-            GazeCloudAPI.UseClickRecalibration = true;
+            // Enable click recalibration if available
+            if (typeof GazeCloudAPI.UseClickRecalibration !== 'undefined') {
+                GazeCloudAPI.UseClickRecalibration = true;
+            }
             
-            // Set up video feed container
-            GazeCloudAPI.SetFeedbackLink(null); // Remove feedback link
+            // Removed SetFeedbackLink as it's not available
+        }
+        
+        // Set up an observer to watch for video elements added by GazeCloudAPI
+        function setupVideoObserver() {
+            // Create a MutationObserver to watch for changes to the DOM
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+                        for (let i = 0; i < mutation.addedNodes.length; i++) {
+                            const node = mutation.addedNodes[i];
+                            
+                            // Check if the added node is a video element or contains video elements
+                            if (node.nodeName === 'VIDEO' || (node.querySelector && node.querySelector('video'))) {
+                                const videoElement = node.nodeName === 'VIDEO' ? node : node.querySelector('video');
+                                
+                                if (videoElement) {
+                                    console.log('Found video element added by GazeCloudAPI');
+                                    
+                                    // Clone the video element
+                                    const clonedVideo = videoElement.cloneNode(true);
+                                    
+                                    // Style the cloned video
+                                    clonedVideo.style.width = '100%';
+                                    clonedVideo.style.height = 'auto';
+                                    clonedVideo.style.borderRadius = '8px';
+                                    
+                                    // Clear the container and add the cloned video
+                                    const videoContainer = document.getElementById('video-container');
+                                    videoContainer.innerHTML = '';
+                                    videoContainer.appendChild(clonedVideo);
+                                    
+                                    // Add recording indicator
+                                    const recordingIndicator = document.createElement('div');
+                                    recordingIndicator.className = 'recording-indicator';
+                                    videoContainer.appendChild(recordingIndicator);
+                                    
+                                    // We found what we were looking for, so disconnect the observer
+                                    observer.disconnect();
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+            
+            // Start observing the document body for changes
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            
+            // Store the observer so we can disconnect it later if needed
+            window.gazeVideoObserver = observer;
         }
         
         // Start tracking
@@ -244,10 +315,28 @@
             try {
                 console.log('Starting eye tracking...');
                 
-                // Set the video container
+                // Set the video container if the method exists
                 const videoContainer = document.getElementById('video-container');
                 videoContainer.innerHTML = ''; // Clear any existing content
-                GazeCloudAPI.SetVideoContainerElement(videoContainer);
+                
+                if (typeof GazeCloudAPI.SetVideoContainerElement === 'function') {
+                    GazeCloudAPI.SetVideoContainerElement(videoContainer);
+                } else {
+                    console.warn('GazeCloudAPI.SetVideoContainerElement is not available');
+                    
+                    // Create a message to inform the user
+                    const message = document.createElement('div');
+                    message.textContent = 'Calibration will appear in a separate window. Please follow the instructions there.';
+                    message.style.padding = '10px';
+                    message.style.backgroundColor = '#f8f9fa';
+                    message.style.border = '1px solid #dee2e6';
+                    message.style.borderRadius = '4px';
+                    message.style.marginBottom = '10px';
+                    videoContainer.appendChild(message);
+                    
+                    // Set up observer to watch for video elements
+                    setupVideoObserver();
+                }
                 
                 // Start tracking
                 GazeCloudAPI.StartEyeTracking();
@@ -274,6 +363,12 @@
                 
                 // Stop tracking
                 GazeCloudAPI.StopEyeTracking();
+                
+                // Disconnect video observer if it exists
+                if (window.gazeVideoObserver) {
+                    window.gazeVideoObserver.disconnect();
+                    window.gazeVideoObserver = null;
+                }
                 
                 // Update status
                 const statusElement = document.getElementById('status');
