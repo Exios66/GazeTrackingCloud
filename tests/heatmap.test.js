@@ -433,19 +433,37 @@ describe('Heatmap Module Tests', () => {
     test('should create a download link for the heatmap image', () => {
       GazeHeatmap.init();
       
+      // Create a mock click function
+      const mockClick = jest.fn();
+      document.createElement.mockReturnValueOnce({
+        href: '',
+        download: 'test.png',
+        click: mockClick,
+        style: {}
+      });
+      
       const result = GazeHeatmap.saveAsImage('test.png');
       
       expect(result).toBe(true);
       expect(document.createElement).toHaveBeenCalledWith('a');
-      expect(document.createElement().click).toHaveBeenCalled();
+      expect(mockClick).toHaveBeenCalled();
     });
     
     test('should use default filename if not provided', () => {
       GazeHeatmap.init();
       
+      // Create a mock with default filename
+      const mockElement = {
+        href: '',
+        download: '',
+        click: jest.fn(),
+        style: {}
+      };
+      document.createElement.mockReturnValueOnce(mockElement);
+      
       GazeHeatmap.saveAsImage();
       
-      expect(document.createElement().download).toBe('heatmap.png');
+      expect(mockElement.download).toBe('heatmap.png');
     });
     
     test('should return false if heatmap is not initialized', () => {
