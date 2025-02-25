@@ -27,24 +27,52 @@ A web application for eye tracking using the GazeRecorder API. This application 
    cd GazeTrackingCloud
    ```
 
-2. Install dependencies:
+2. Run the setup script:
+   ```
+   npm run setup
+   ```
+   
+   This script will:
+   - Check if Node.js is installed
+   - Create the data directory if it doesn't exist
+   - Install all dependencies
+   - Build the application
+
+### Running the Application
+
+Simply run:
+```
+npm start
+```
+
+This command will:
+1. Start the local server
+2. Automatically open the application in your default browser
+3. Navigate to http://localhost:3000
+
+### Manual Installation (Alternative)
+
+If you prefer to install manually:
+
+1. Install dependencies:
    ```
    npm install
    ```
 
-### Running the Application
-
-1. Start the local server:
+2. Create data directory:
    ```
-   npm start
+   npm run build
    ```
 
-2. Open your browser and navigate to:
+3. Start the server:
+   ```
+   npm run server
+   ```
+
+4. Open in browser:
    ```
    http://localhost:3000
    ```
-
-3. Allow camera permissions when prompted
 
 ### Using the Application
 
@@ -60,6 +88,13 @@ A web application for eye tracking using the GazeRecorder API. This application 
 All gaze tracking data is stored in two locations:
 - Browser's IndexedDB for client-side storage
 - Server's `data` directory in JSON format (organized by session)
+
+## Development
+
+To run the application in development mode with auto-reload:
+```
+npm run dev
+```
 
 ## Technologies Used
 
