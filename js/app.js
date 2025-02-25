@@ -46,8 +46,58 @@ document.addEventListener('DOMContentLoaded', async () => {
         showError('Error connecting to eye tracking service');
     }
     
+    // Add CSS for disabled buttons
+    addButtonStyles();
+    
     console.log('Application initialized');
 });
+
+/**
+ * Add CSS styles for disabled buttons
+ */
+function addButtonStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        .disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        
+        #video-container {
+            position: relative;
+            width: 100%;
+            min-height: 240px;
+            background-color: #f0f0f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        #video-container video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .recording-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #e74c3c;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+}
 
 /**
  * Check for camera permissions and ensure camera system is properly initialized
@@ -107,7 +157,7 @@ function setupEventListeners() {
             
             try {
                 if (!GazeTracker.isAPIAvailable()) {
-                    GazeTracker.showError('GazeRecorder API not loaded. Please reload the API and try again.');
+                    GazeTracker.showError('GazeCloud API not loaded. Please reload the API and try again.');
                     return;
                 }
                 
@@ -115,6 +165,15 @@ function setupEventListeners() {
                     // Disable button during calibration and tracking
                     startTrackingBtn.classList.add('disabled');
                     startTrackingBtn.textContent = 'Calibrating...';
+                    
+                    // Clear any previous recording indicator
+                    const videoContainer = document.getElementById('video-container');
+                    if (videoContainer) {
+                        const placeholder = document.getElementById('video-placeholder');
+                        if (placeholder) {
+                            videoContainer.removeChild(placeholder);
+                        }
+                    }
                     
                     // Start calibration first
                     await GazeTracker.startCalibration();
@@ -155,6 +214,23 @@ function setupEventListeners() {
                     }
                     stopTrackingBtn.classList.remove('disabled');
                     stopTrackingBtn.textContent = 'Stop Tracking';
+                    
+                    // Remove recording indicator if it exists
+                    const recordingIndicator = document.querySelector('.recording-indicator');
+                    if (recordingIndicator) {
+                        recordingIndicator.remove();
+                    }
+                    
+                    // Show placeholder if video container is empty
+                    const videoContainer = document.getElementById('video-container');
+                    if (videoContainer && videoContainer.children.length === 0) {
+                        const placeholder = document.createElement('div');
+                        placeholder.id = 'video-placeholder';
+                        const placeholderText = document.createElement('p');
+                        placeholderText.textContent = 'Your webcam feed will appear here';
+                        placeholder.appendChild(placeholderText);
+                        videoContainer.appendChild(placeholder);
+                    }
                 }
             } catch (error) {
                 console.error('Error stopping tracking:', error);
@@ -206,37 +282,123 @@ function setupEventListeners() {
             
             try {
                 const sessionId = GazeTracker.getCurrentSessionId();
-                if (!sessionId) {
-                    GazeTracker.showError('No active session to export');
-                    return;
-                }
                 
-                exportDataBtn.textContent = 'Exporting...';
+                // Show export options
+                const exportOptions = document.createElement('div');
+                exportOptions.className = 'export-options';
+                exportOptions.style.position = 'absolute';
+                exportOptions.style.top = `${e.clientY + 10}px`;
+                exportOptions.style.left = `${e.clientX}px`;
+                exportOptions.style.backgroundColor = 'white';
+                exportOptions.style.border = '1px solid #ccc';
+                exportOptions.style.borderRadius = '4px';
+                exportOptions.style.padding = '10px';
+                exportOptions.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+                exportOptions.style.zIndex = '1000';
                 
-                const jsonData = await GazeTracker.exportSessionData();
-                if (!jsonData) {
-                    GazeTracker.showError('No data to export');
-                    exportDataBtn.textContent = 'Export Data';
-                    return;
-                }
+                const csvOption = document.createElement('button');
+                csvOption.textContent = 'Export as CSV';
+                csvOption.style.display = 'block';
+                csvOption.style.width = '100%';
+                csvOption.style.padding = '8px';
+                csvOption.style.marginBottom = '5px';
+                csvOption.style.backgroundColor = '#3498db';
+                csvOption.style.color = 'white';
+                csvOption.style.border = 'none';
+                csvOption.style.borderRadius = '4px';
+                csvOption.style.cursor = 'pointer';
                 
-                // Create download link
-                const blob = new Blob([jsonData], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `gaze-data-session-${sessionId}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                const jsonOption = document.createElement('button');
+                jsonOption.textContent = 'Export as JSON';
+                jsonOption.style.display = 'block';
+                jsonOption.style.width = '100%';
+                jsonOption.style.padding = '8px';
+                jsonOption.style.backgroundColor = '#3498db';
+                jsonOption.style.color = 'white';
+                jsonOption.style.border = 'none';
+                jsonOption.style.borderRadius = '4px';
+                jsonOption.style.cursor = 'pointer';
                 
-                GazeTracker.showStatusMessage('Data exported successfully');
+                exportOptions.appendChild(csvOption);
+                exportOptions.appendChild(jsonOption);
+                document.body.appendChild(exportOptions);
+                
+                // Close options when clicking outside
+                const closeOptions = (event) => {
+                    if (!exportOptions.contains(event.target) && event.target !== exportDataBtn) {
+                        document.body.removeChild(exportOptions);
+                        document.removeEventListener('click', closeOptions);
+                    }
+                };
+                
+                // Add a small delay before adding the event listener to prevent immediate closing
+                setTimeout(() => {
+                    document.addEventListener('click', closeOptions);
+                }, 100);
+                
+                // CSV export
+                csvOption.addEventListener('click', async () => {
+                    document.body.removeChild(exportOptions);
+                    document.removeEventListener('click', closeOptions);
+                    
+                    exportDataBtn.textContent = 'Exporting CSV...';
+                    exportDataBtn.classList.add('disabled');
+                    
+                    try {
+                        await GazeTracker.exportCSV();
+                        GazeTracker.showStatusMessage('CSV data exported successfully');
+                    } catch (error) {
+                        console.error('Error exporting CSV:', error);
+                        GazeTracker.showError('Failed to export CSV: ' + error.message);
+                    } finally {
+                        exportDataBtn.textContent = 'Export Data';
+                        exportDataBtn.classList.remove('disabled');
+                    }
+                });
+                
+                // JSON export
+                jsonOption.addEventListener('click', async () => {
+                    document.body.removeChild(exportOptions);
+                    document.removeEventListener('click', closeOptions);
+                    
+                    exportDataBtn.textContent = 'Exporting JSON...';
+                    exportDataBtn.classList.add('disabled');
+                    
+                    try {
+                        if (!sessionId) {
+                            GazeTracker.showError('No active session to export');
+                            return;
+                        }
+                        
+                        const jsonData = await GazeTracker.exportSessionData();
+                        if (!jsonData) {
+                            GazeTracker.showError('No data to export');
+                            return;
+                        }
+                        
+                        // Create download link
+                        const blob = new Blob([jsonData], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `gaze-data-session-${sessionId}.json`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        
+                        GazeTracker.showStatusMessage('JSON data exported successfully');
+                    } catch (error) {
+                        console.error('Error exporting JSON:', error);
+                        GazeTracker.showError('Failed to export JSON: ' + error.message);
+                    } finally {
+                        exportDataBtn.textContent = 'Export Data';
+                        exportDataBtn.classList.remove('disabled');
+                    }
+                });
             } catch (error) {
-                console.error('Error exporting data:', error);
-                GazeTracker.showError('Failed to export data: ' + error.message);
-            } finally {
-                exportDataBtn.textContent = 'Export Data';
+                console.error('Error showing export options:', error);
+                GazeTracker.showError('Failed to show export options: ' + error.message);
             }
         });
     } else {
@@ -249,20 +411,21 @@ function setupEventListeners() {
         reloadAPIBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             
-            reloadAPIBtn.classList.add('disabled');
-            reloadAPIBtn.textContent = 'Loading...';
-            
             try {
-                await GazeTracker.loadGazeRecorderAPI();
-                GazeTracker.checkAndInitializeAPI();
+                reloadAPIBtn.textContent = 'Loading...';
+                reloadAPIBtn.classList.add('disabled');
+                
+                await GazeTracker.loadGazeCloudAPI();
+                await GazeTracker.checkAndInitializeAPI();
                 updateAPIStatus();
-                GazeTracker.showStatusMessage('GazeRecorder API reloaded successfully');
+                
+                GazeTracker.showStatusMessage('GazeCloud API reloaded successfully');
             } catch (error) {
                 console.error('Error reloading API:', error);
-                GazeTracker.showError('Failed to reload GazeRecorder API: ' + error.message);
+                GazeTracker.showError('Failed to reload API: ' + error.message);
             } finally {
-                reloadAPIBtn.classList.remove('disabled');
                 reloadAPIBtn.textContent = 'Reload API';
+                reloadAPIBtn.classList.remove('disabled');
             }
         });
     } else {
@@ -272,119 +435,140 @@ function setupEventListeners() {
     // Check API status button
     const checkAPIStatusBtn = document.getElementById('check-api-status');
     if (checkAPIStatusBtn) {
-        checkAPIStatusBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            try {
-                updateAPIStatus();
-                GazeTracker.showStatusMessage('API status updated');
-            } catch (error) {
-                console.error('Error checking API status:', error);
-                GazeTracker.showError('Failed to check API status: ' + error.message);
-            }
+        checkAPIStatusBtn.addEventListener('click', () => {
+            updateAPIStatus();
+            GazeTracker.showStatusMessage('API status updated');
         });
-    } else {
-        console.error('Check API status button not found in the DOM');
     }
-    
-    // Add keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-        try {
-            // ESC key to stop tracking
-            if (e.key === 'Escape' && GazeTracker.isTrackingActive() && stopTrackingBtn) {
-                stopTrackingBtn.click();
-            }
-        } catch (error) {
-            console.error('Error handling keyboard shortcut:', error);
-        }
-    });
 }
 
 /**
- * Update API status indicator
+ * Update API status display
  */
 function updateAPIStatus() {
     const statusIndicator = document.getElementById('api-status-indicator');
     const statusText = document.getElementById('api-status-text');
     
+    if (!statusIndicator || !statusText) {
+        console.error('API status elements not found');
+        return;
+    }
+    
     if (GazeTracker.isAPIAvailable()) {
-        statusIndicator.className = 'status-dot status-online';
-        statusText.textContent = 'GazeRecorder API is loaded and ready';
+        statusIndicator.style.backgroundColor = '#2ecc71'; // Green
+        statusText.textContent = 'API Available';
+        
+        if (GazeTracker.isTrackingActive()) {
+            statusText.textContent += ' (Tracking Active)';
+            
+            // Add recording indicator to video container if not already present
+            const videoContainer = document.getElementById('video-container');
+            if (videoContainer && !document.querySelector('.recording-indicator')) {
+                const recordingIndicator = document.createElement('div');
+                recordingIndicator.className = 'recording-indicator';
+                videoContainer.appendChild(recordingIndicator);
+            }
+        }
     } else {
-        statusIndicator.className = 'status-dot status-offline';
-        statusText.textContent = 'GazeRecorder API is not loaded';
+        statusIndicator.style.backgroundColor = '#e74c3c'; // Red
+        statusText.textContent = 'API Unavailable';
     }
 }
 
 /**
- * Initialize the gaze pattern chart
+ * Initialize chart for visualization
  */
 function initializeChart() {
-    const ctx = document.getElementById('gaze-chart').getContext('2d');
+    const chartCanvas = document.getElementById('gaze-chart');
+    if (!chartCanvas) {
+        console.error('Chart canvas not found');
+        return;
+    }
     
-    window.gazeChart = new Chart(ctx, {
-        type: 'scatter',
-        data: {
-            datasets: [{
-                label: 'Gaze Points',
-                data: [],
-                backgroundColor: 'rgba(52, 152, 219, 0.5)',
-                pointRadius: 5,
-                pointHoverRadius: 7
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    type: 'linear',
-                    position: 'bottom',
-                    title: {
-                        display: true,
-                        text: 'X Coordinate'
+    try {
+        window.gazeChart = new Chart(chartCanvas, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Gaze Points',
+                    data: [],
+                    backgroundColor: 'rgba(52, 152, 219, 0.5)',
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom',
+                        min: 0,
+                        max: window.innerWidth,
+                        title: {
+                            display: true,
+                            text: 'X Coordinate'
+                        }
+                    },
+                    y: {
+                        min: 0,
+                        max: window.innerHeight,
+                        title: {
+                            display: true,
+                            text: 'Y Coordinate'
+                        }
                     }
                 },
-                y: {
-                    type: 'linear',
+                plugins: {
                     title: {
                         display: true,
-                        text: 'Y Coordinate'
+                        text: 'Gaze Point Distribution'
                     },
-                    reverse: true // Reverse Y axis to match screen coordinates
-                }
-            },
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Gaze Pattern Visualization'
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return `X: ${context.parsed.x}, Y: ${context.parsed.y}`;
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `(${Math.round(context.parsed.x)}, ${Math.round(context.parsed.y)})`;
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+        
+        console.log('Chart initialized');
+    } catch (error) {
+        console.error('Error initializing chart:', error);
+    }
 }
 
 /**
  * Update chart with session data
  */
 async function updateChartWithSessionData() {
-    const sessionId = GazeTracker.getCurrentSessionId();
-    if (!sessionId) {
+    if (!window.gazeChart) {
+        console.error('Chart not initialized');
         return;
     }
     
     try {
-        // Get session data from database
+        const sessionId = GazeTracker.getCurrentSessionId();
+        if (!sessionId) {
+            console.warn('No session ID available for chart update');
+            return;
+        }
+        
         const sessionData = await GazeDB.getSessionData(sessionId);
+        if (!sessionData || sessionData.length === 0) {
+            console.warn('No session data available for chart');
+            return;
+        }
+        
+        // Sample data (take every 10th point to avoid overloading the chart)
+        const sampledData = sessionData.filter((_, index) => index % 10 === 0);
         
         // Format data for chart
-        const chartData = sessionData.map(data => ({
+        const chartData = sampledData.map(data => ({
             x: data.gazeX,
             y: data.gazeY
         }));
@@ -393,72 +577,135 @@ async function updateChartWithSessionData() {
         window.gazeChart.data.datasets[0].data = chartData;
         window.gazeChart.update();
         
-        GazeTracker.showStatusMessage('Chart updated with session data');
+        console.log(`Chart updated with ${chartData.length} data points`);
     } catch (error) {
         console.error('Error updating chart:', error);
-        GazeTracker.showError('Failed to update chart with session data');
     }
 }
 
 /**
- * Show error message with enhanced error handling
- * @param {string} message - The error message to display
- * @param {Error} [error] - Optional error object for detailed logging
- * @param {string} [level='error'] - Error severity level: 'error', 'warning', or 'info'
+ * Show error message to the user
+ * @param {string} message - The error message
+ * @param {Error} error - Optional error object
+ * @param {string} level - Error level (error, warning, info)
  */
 function showError(message, error, level = 'error') {
-    // Log to console with appropriate level
-    if (level === 'warning') {
-        console.warn(`Warning: ${message}`);
-    } else if (level === 'info') {
-        console.info(`Info: ${message}`);
-    } else {
-        console.error(`Error: ${message}`);
-    }
-    
-    // Log detailed error if provided
+    // Log to console
     if (error) {
-        console.error('Error details:', error);
-        console.error('Stack trace:', error.stack);
+        console.error(message, error);
+    } else {
+        console.error(message);
     }
     
-    // Create UI notification instead of using alert
-    const errorContainer = document.getElementById('error-container') || createErrorContainer();
+    // Create error container if it doesn't exist
+    let errorContainer = document.getElementById('error-container');
+    if (!errorContainer) {
+        errorContainer = createErrorContainer();
+    }
     
     // Create error message element
     const errorElement = document.createElement('div');
-    errorElement.className = `notification ${level}`;
-    errorElement.innerHTML = `
-        <span class="notification-icon">${level === 'error' ? '❌' : level === 'warning' ? '⚠️' : 'ℹ️'}</span>
-        <span class="notification-message">${message}</span>
-        <button class="notification-close">×</button>
-    `;
+    errorElement.className = `error-message ${level}`;
     
-    // Add close button functionality
-    const closeButton = errorElement.querySelector('.notification-close');
-    closeButton.addEventListener('click', () => {
-        errorElement.remove();
-    });
-    
-    // Auto-remove after 10 seconds for non-critical errors
-    if (level !== 'error') {
-        setTimeout(() => {
-            errorElement.remove();
-        }, 10000);
+    // Set background color based on level
+    switch (level) {
+        case 'error':
+            errorElement.style.backgroundColor = 'rgba(231, 76, 60, 0.9)';
+            break;
+        case 'warning':
+            errorElement.style.backgroundColor = 'rgba(241, 196, 15, 0.9)';
+            break;
+        case 'info':
+            errorElement.style.backgroundColor = 'rgba(52, 152, 219, 0.9)';
+            break;
     }
     
-    // Add to container
+    // Add message
+    errorElement.textContent = message;
+    
+    // Add close button
+    const closeButton = document.createElement('button');
+    closeButton.className = 'error-close';
+    closeButton.textContent = '×';
+    closeButton.addEventListener('click', () => {
+        errorContainer.removeChild(errorElement);
+        
+        // Hide container if no more errors
+        if (errorContainer.children.length === 0) {
+            errorContainer.style.display = 'none';
+        }
+    });
+    
+    errorElement.appendChild(closeButton);
     errorContainer.appendChild(errorElement);
+    errorContainer.style.display = 'block';
+    
+    // Auto-hide after 5 seconds for warnings and info
+    if (level !== 'error') {
+        setTimeout(() => {
+            if (errorElement.parentNode) {
+                errorContainer.removeChild(errorElement);
+                
+                // Hide container if no more errors
+                if (errorContainer.children.length === 0) {
+                    errorContainer.style.display = 'none';
+                }
+            }
+        }, 5000);
+    }
 }
 
 /**
- * Creates error container if it doesn't exist
- * @returns {HTMLElement} The error container element
+ * Create error container for displaying error messages
+ * @returns {HTMLElement} - The error container element
  */
 function createErrorContainer() {
     const container = document.createElement('div');
     container.id = 'error-container';
-    container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+    container.style.position = 'fixed';
+    container.style.top = '20px';
+    container.style.right = '20px';
+    container.style.maxWidth = '400px';
+    container.style.zIndex = '1000';
+    container.style.display = 'none';
+    
+    // Add styles for error messages
+    const style = document.createElement('style');
+    style.textContent = `
+        .error-message {
+            position: relative;
+            margin-bottom: 10px;
+            padding: 15px 35px 15px 15px;
+            border-radius: 4px;
+            color: white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .error-close {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    `;
+    
+    document.head.appendChild(style);
     document.body.appendChild(container);
+    
     return container;
 }

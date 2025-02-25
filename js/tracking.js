@@ -23,6 +23,8 @@ const GazeTracker = (() => {
     let headZElement = null;
     let sessionDurationElement = null;
     let dataPointsElement = null;
+    let videoContainer = null;
+    let statusIndicator = null;
     
     /**
      * Initialize the tracker
@@ -36,6 +38,11 @@ const GazeTracker = (() => {
         headZElement = document.getElementById('head-z');
         sessionDurationElement = document.getElementById('session-duration');
         dataPointsElement = document.getElementById('data-points');
+        videoContainer = document.getElementById('video-container');
+        statusIndicator = document.getElementById('api-status-indicator');
+        
+        // Set up UI event listeners
+        document.getElementById('check-api-status').addEventListener('click', updateAPIStatusDisplay);
         
         // Check if GazeCloudAPI is loaded
         checkAndInitializeAPI();
@@ -65,8 +72,12 @@ const GazeTracker = (() => {
                 // Enable click recalibration
                 GazeCloudAPI.UseClickRecalibration = true;
                 
+                // Set up video feed container
+                GazeCloudAPI.SetFeedbackLink(null); // Remove feedback link
+                
                 console.log('GazeCloudAPI initialized successfully');
                 showStatusMessage('GazeCloudAPI loaded successfully. Click "Start Tracking" to begin.');
+                updateAPIStatusDisplay();
                 return true;
             } catch (error) {
                 console.error('Error initializing GazeCloudAPI:', error);
@@ -100,6 +111,25 @@ const GazeTracker = (() => {
                 redirectToErrorPage();
                 return false;
             }
+        }
+    };
+    
+    /**
+     * Update API status display
+     */
+    const updateAPIStatusDisplay = () => {
+        const statusText = document.getElementById('api-status-text');
+        
+        if (typeof GazeCloudAPI !== 'undefined') {
+            statusIndicator.style.backgroundColor = '#2ecc71'; // Green
+            statusText.textContent = 'API Available';
+            
+            if (isTracking) {
+                statusText.textContent += ' (Tracking Active)';
+            }
+        } else {
+            statusIndicator.style.backgroundColor = '#e74c3c'; // Red
+            statusText.textContent = 'API Unavailable';
         }
     };
     
@@ -196,6 +226,15 @@ const GazeTracker = (() => {
             
             // Start GazeCloudAPI
             if (typeof GazeCloudAPI !== 'undefined') {
+                // Configure video container
+                if (videoContainer) {
+                    // Clear any existing content
+                    videoContainer.innerHTML = '';
+                    // Set the video container for GazeCloudAPI
+                    GazeCloudAPI.SetVideoContainerElement(videoContainer);
+                }
+                
+                // Start tracking
                 GazeCloudAPI.StartEyeTracking();
                 
                 // Initialize heatmap
@@ -204,6 +243,9 @@ const GazeTracker = (() => {
                 
                 isTracking = true;
                 console.log('Tracking started');
+                
+                // Update UI to reflect tracking state
+                updateTrackingUI(true);
                 
                 // Show status message
                 showStatusMessage('Tracking started. Look around the screen to generate data.');
@@ -241,10 +283,17 @@ const GazeTracker = (() => {
                 
                 // Save data to server
                 await saveSessionToServer(currentSessionId, allGazeData);
+                
+                // Generate and save CSV file
+                const csvData = generateCSV(allGazeData);
+                saveCSVLocally(csvData, `gaze_data_session_${currentSessionId}.csv`);
             }
             
             isTracking = false;
             console.log('Tracking stopped');
+            
+            // Update UI to reflect tracking state
+            updateTrackingUI(false);
             
             // Show status message
             showStatusMessage('Tracking stopped. Data has been saved.');
@@ -252,6 +301,35 @@ const GazeTracker = (() => {
             console.error('Error stopping tracking:', error);
             showError('Failed to stop tracking properly. Some data may not be saved.');
         }
+    };
+    
+    /**
+     * Update UI elements based on tracking state
+     * @param {boolean} isActive - Whether tracking is active
+     */
+    const updateTrackingUI = (isActive) => {
+        const startButton = document.getElementById('start-tracking');
+        const stopButton = document.getElementById('stop-tracking');
+        const exportButton = document.getElementById('export-data');
+        
+        if (startButton && stopButton) {
+            if (isActive) {
+                startButton.classList.add('disabled');
+                stopButton.classList.remove('disabled');
+                if (exportButton) {
+                    exportButton.classList.add('disabled');
+                }
+            } else {
+                startButton.classList.remove('disabled');
+                stopButton.classList.add('disabled');
+                if (exportButton) {
+                    exportButton.classList.remove('disabled');
+                }
+            }
+        }
+        
+        // Update API status display
+        updateAPIStatusDisplay();
     };
     
     /**
@@ -271,7 +349,17 @@ const GazeTracker = (() => {
         
         // Show calibration overlay
         const calibrationOverlay = document.getElementById('calibration-overlay');
-        calibrationOverlay.classList.remove('hidden');
+        if (calibrationOverlay) {
+            calibrationOverlay.classList.remove('hidden');
+        }
+        
+        // Configure video container
+        if (videoContainer) {
+            // Clear any existing content
+            videoContainer.innerHTML = '';
+            // Set the video container for GazeCloudAPI
+            GazeCloudAPI.SetVideoContainerElement(videoContainer);
+        }
         
         // GazeCloudAPI handles calibration automatically when starting tracking
         if (typeof GazeCloudAPI !== 'undefined') {
@@ -292,7 +380,7 @@ const GazeTracker = (() => {
      * @param {Object} gazeData - The gaze data from GazeCloudAPI
      */
     const handleGazeData = (gazeData) => {
-        if (!isTracking || !currentSessionId) {
+        if (!isTracking && !isCalibrating) {
             return;
         }
         
@@ -307,15 +395,17 @@ const GazeTracker = (() => {
         // Update UI
         updateGazeDisplay(docX, docY);
         
-        // Add to heatmap
-        GazeHeatmap.addGazePoint(docX, docY);
-        
-        // Store in database and memory
-        storeGazeData(gazeData);
-        
-        // Increment counter
-        dataPointsCount++;
-        updateDataPointsDisplay();
+        // Add to heatmap if tracking (not just calibrating)
+        if (isTracking) {
+            GazeHeatmap.addGazePoint(docX, docY);
+            
+            // Store in database and memory
+            storeGazeData(gazeData);
+            
+            // Increment counter
+            dataPointsCount++;
+            updateDataPointsDisplay();
+        }
     };
     
     /**
@@ -324,16 +414,20 @@ const GazeTracker = (() => {
     const handleCalibrationEnd = () => {
         // Hide calibration overlay
         const calibrationOverlay = document.getElementById('calibration-overlay');
-        calibrationOverlay.classList.add('hidden');
+        if (calibrationOverlay) {
+            calibrationOverlay.classList.add('hidden');
+        }
         
         isCalibrating = false;
         console.log('Calibration completed');
         
+        // If we weren't already tracking, start a new session
+        if (!isTracking) {
+            startTracking();
+        }
+        
         // Show status message
         showStatusMessage('Calibration completed successfully. Tracking is now active.');
-        
-        // Tracking is already started by GazeCloudAPI
-        isTracking = true;
     };
     
     /**
@@ -397,6 +491,54 @@ const GazeTracker = (() => {
             showError('Failed to save session data to server. Data is still available in the browser.');
             throw error;
         }
+    };
+    
+    /**
+     * Generate CSV data from gaze data
+     * @param {Array} gazeData - The gaze data array
+     * @returns {string} - CSV string
+     */
+    const generateCSV = (gazeData) => {
+        if (!gazeData || gazeData.length === 0) {
+            return 'No data available';
+        }
+        
+        // CSV header
+        const headers = ['timestamp', 'gazeX', 'gazeY', 'gazeState'];
+        
+        // Create CSV content
+        const csvContent = [
+            headers.join(','),
+            ...gazeData.map(data => {
+                return [
+                    data.timestamp,
+                    data.gazeX,
+                    data.gazeY,
+                    data.gazeState
+                ].join(',');
+            })
+        ].join('\n');
+        
+        return csvContent;
+    };
+    
+    /**
+     * Save CSV data locally by triggering a download
+     * @param {string} csvData - The CSV data string
+     * @param {string} filename - The filename to save as
+     */
+    const saveCSVLocally = (csvData, filename) => {
+        const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
     
     /**
@@ -531,7 +673,39 @@ const GazeTracker = (() => {
     };
     
     /**
-     * Export session data
+     * Export session data as CSV
+     */
+    const exportCSV = async () => {
+        if (!currentSessionId && allGazeData.length === 0) {
+            console.warn('No session data to export');
+            showError('No session data to export. Start tracking first.');
+            return;
+        }
+        
+        try {
+            let dataToExport = allGazeData;
+            
+            // If we have a session ID but no data in memory, try to get it from the database
+            if (allGazeData.length === 0 && currentSessionId) {
+                dataToExport = await GazeDB.getSessionData(currentSessionId);
+            }
+            
+            // Generate CSV
+            const csvData = generateCSV(dataToExport);
+            
+            // Save CSV file
+            const filename = `gaze_data_session_${currentSessionId || Date.now()}.csv`;
+            saveCSVLocally(csvData, filename);
+            
+            showStatusMessage(`Data exported as ${filename}`);
+        } catch (error) {
+            console.error('Error exporting CSV:', error);
+            showError('Failed to export data as CSV. Please try again.');
+        }
+    };
+    
+    /**
+     * Export session data as JSON
      * @returns {Promise<string>} - Resolves with the JSON string
      */
     const exportSessionData = async () => {
@@ -590,6 +764,7 @@ const GazeTracker = (() => {
         showHeatmap,
         hideHeatmap,
         exportSessionData,
+        exportCSV,
         isTrackingActive,
         isCalibrationActive,
         getCurrentSessionId,
@@ -597,6 +772,7 @@ const GazeTracker = (() => {
         showError,
         isAPIAvailable,
         loadGazeCloudAPI,
-        checkAndInitializeAPI
+        checkAndInitializeAPI,
+        updateAPIStatusDisplay
     };
 })(); 
