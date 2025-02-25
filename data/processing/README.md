@@ -145,4 +145,4 @@ async function processAndDisplayResults(sessionId) {
 
 - The processing pipeline is designed to work with data in the format provided by GazeCloudAPI
 - If you're processing data from a different source, you may need to adapt the data format
-- For large datasets, consider adjusting options like smoothing window size for optimal performance 
+- For large datasets, consider adjusting options like smoothing window size for optimal performance

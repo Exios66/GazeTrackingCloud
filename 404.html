@@ -3,55 +3,234 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>404 - Page Not Found</title>
+    <meta name="description" content="Page not found - GazeTrackingCloud">
+    <title>404 - Page Not Found | GazeTrackingCloud</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #4361ee;
+            --secondary-color: #3a0ca3;
+            --accent-color: #f72585;
+            --text-color: #2b2d42;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f8f9fa;
-            color: #333;
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
             padding: 20px;
             text-align: center;
+            overflow-x: hidden;
+            position: relative;
         }
+        
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(67, 97, 238, 0.05), transparent 70%);
+            z-index: -1;
+        }
+        
         .container {
-            max-width: 600px;
-            padding: 40px;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 650px;
+            padding: 50px;
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            position: relative;
+            overflow: hidden;
+            animation: fadeIn 0.8s ease-out;
         }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .error-code {
+            font-size: 8rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+            line-height: 1;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .error-code::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+            bottom: 10px;
+            left: 0;
+            border-radius: 10px;
+            opacity: 0.5;
+        }
+        
         h1 {
-            color: #2c3e50;
-            font-size: 3rem;
-            margin-bottom: 1rem;
+            color: var(--text-color);
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            font-weight: 600;
         }
+        
         p {
             font-size: 1.2rem;
-            margin-bottom: 2rem;
+            margin-bottom: 2.5rem;
+            color: rgba(43, 45, 66, 0.8);
+            line-height: 1.6;
         }
-        a {
-            display: inline-block;
-            background-color: #3498db;
+        
+        .buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--primary-color);
             color: white;
-            padding: 10px 20px;
-            border-radius: 4px;
+            padding: 12px 24px;
+            border-radius: 8px;
             text-decoration: none;
-            transition: background-color 0.3s;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(67, 97, 238, 0.2);
         }
-        a:hover {
-            background-color: #2980b9;
+        
+        .btn:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(67, 97, 238, 0.3);
+        }
+        
+        .btn-outline {
+            background-color: transparent;
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+            box-shadow: none;
+        }
+        
+        .btn-outline:hover {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .icon {
+            margin-right: 8px;
+        }
+        
+        .eye-animation {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 50% 40%, #fff, var(--primary-color));
+            top: 20px;
+            right: 20px;
+            animation: eyeMove 5s infinite ease-in-out;
+            box-shadow: 0 0 15px rgba(67, 97, 238, 0.5);
+        }
+        
+        @keyframes eyeMove {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(-10px, 10px); }
+            50% { transform: translate(10px, -5px); }
+            75% { transform: translate(-5px, -10px); }
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 30px;
+            }
+            
+            .error-code {
+                font-size: 6rem;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .error-code {
+                font-size: 5rem;
+            }
+            
+            .buttons {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>404</h1>
-        <p>Oops! The page you're looking for doesn't exist.</p>
-        <a href="/">Return to Home</a>
+        <div class="eye-animation"></div>
+        <div class="error-code">404</div>
+        <h1>Page Not Found</h1>
+        <p>Oops! We couldn't find the page you're looking for. It might have been moved, deleted, or never existed in the first place. Don't worry, we're keeping an eye out for it!</p>
+        <div class="buttons">
+            <a href="/" class="btn">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                Return Home
+            </a>
+            <a href="javascript:history.back()" class="btn btn-outline">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                Go Back
+            </a>
+        </div>
     </div>
+    <script>
+        // Simple animation for the eye to follow cursor
+        document.addEventListener('mousemove', (e) => {
+            const eye = document.querySelector('.eye-animation');
+            if (!eye) return;
+            
+            const x = e.clientX / window.innerWidth;
+            const y = e.clientY / window.innerHeight;
+            
+            const maxMove = 15;
+            const moveX = (x - 0.5) * maxMove;
+            const moveY = (y - 0.5) * maxMove;
+            
+            eye.style.transform = `translate(${moveX}px, ${moveY}px)`;
+        });
+    </script>
 </body>
-</html> 
+</html>

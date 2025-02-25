@@ -625,4 +625,4 @@ describe('Long Session Tests', () => {
     expect(csvData).toContain('timestamp,datetime,elapsed_time,gaze_x,gaze_y,gaze_state,session_id');
     expect(csvData.split('\n').length).toBeGreaterThan(12000);
   });
-}); 
+});
