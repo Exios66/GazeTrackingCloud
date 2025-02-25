@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GazeTrackingCloud</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- GazeRecorder API -->
+    <script src="https://app.gazerecorder.com/GazeRecorderAPI.js"></script>
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- heatmap.js for gaze heatmaps -->
+    <script src="https://unpkg.com/heatmap.js@2.0.5/build/heatmap.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>GazeTrackingCloud</h1>
+        <nav>
+            <ul>
+                <li><a href="#" id="start-tracking">Start Tracking</a></li>
+                <li><a href="#" id="stop-tracking">Stop Tracking</a></li>
+                <li><a href="#" id="show-heatmap">Show Heatmap</a></li>
+                <li><a href="#" id="export-data">Export Data</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section id="tracking-container">
+            <div id="video-container">
+                <div id="video-placeholder">
+                    <p>Your webcam feed will appear here</p>
+                </div>
+            </div>
+            <div id="calibration-overlay" class="hidden">
+                <div class="calibration-point"></div>
+                <div class="calibration-instructions">
+                    <p>Please follow the dot with your eyes for calibration</p>
+                </div>
+            </div>
+            <div id="heatmap-container" class="hidden"></div>
+        </section>
+
+        <section id="data-display">
+            <div class="data-card">
+                <h3>Real-time Gaze Data</h3>
+                <div id="gaze-coordinates">
+                    <p>X: <span id="gaze-x">0</span></p>
+                    <p>Y: <span id="gaze-y">0</span></p>
+                </div>
+            </div>
+            <div class="data-card">
+                <h3>Head Position</h3>
+                <div id="head-position">
+                    <p>X: <span id="head-x">0</span></p>
+                    <p>Y: <span id="head-y">0</span></p>
+                    <p>Z: <span id="head-z">0</span></p>
+                </div>
+            </div>
+            <div class="data-card">
+                <h3>Session Stats</h3>
+                <div id="session-stats">
+                    <p>Duration: <span id="session-duration">00:00</span></p>
+                    <p>Data Points: <span id="data-points">0</span></p>
+                </div>
+            </div>
+        </section>
+
+        <section id="visualization">
+            <h2>Gaze Patterns</h2>
+            <canvas id="gaze-chart"></canvas>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2023 GazeTrackingCloud</p>
+    </footer>
+
+    <!-- Custom JavaScript -->
+    <script src="js/database.js"></script>
+    <script src="js/heatmap.js"></script>
+    <script src="js/tracking.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html> 
