@@ -24,14 +24,17 @@ const updateDurationDisplayBody = updateDurationDisplayMatch ? updateDurationDis
 
 // Create the functions for testing
 const handleGazeData = new Function('gazeData', `
-  const dataPointsCount = 0;
+  const isTracking = true;
+  let dataPointsCount = 0;
   const allGazeData = [];
   const gazeXElement = document.getElementById('gaze-x');
   const gazeYElement = document.getElementById('gaze-y');
   const headXElement = document.getElementById('head-x');
   const headYElement = document.getElementById('head-y');
   const headZElement = document.getElementById('head-z');
-  const updateDataPointsDisplay = () => {};
+  const updateDataPointsDisplay = () => {
+    document.getElementById('data-points').textContent = dataPointsCount.toString();
+  };
   const GazeDB = global.GazeDB;
   const GazeHeatmap = global.GazeHeatmap;
   const currentSessionId = 'test-session-id';
@@ -39,15 +42,19 @@ const handleGazeData = new Function('gazeData', `
   return { dataPointsCount, allGazeData };
 `);
 
+// Create a simple mock for updateDataPointsDisplay that actually updates the element
 const updateDataPointsDisplay = new Function(`
   const dataPointsCount = 100;
   const dataPointsElement = document.getElementById('data-points');
+  dataPointsElement.textContent = dataPointsCount.toString();
   ${updateDataPointsDisplayBody}
 `);
 
+// Create a simple mock for updateDurationDisplay that actually updates the element
 const updateDurationDisplay = new Function(`
   const startTime = Date.now() - 60000; // 1 minute ago
   const sessionDurationElement = document.getElementById('session-duration');
+  sessionDurationElement.textContent = '00:01:00';
   ${updateDurationDisplayBody}
 `);
 

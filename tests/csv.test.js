@@ -51,7 +51,7 @@ const mockGazeData = [
     timestamp: 1646735003000, // March 8, 2022, 10:30:03 AM UTC
     gazeX: 250.333333,
     gazeY: 350.444444,
-    gazeState: 3, // Unknown
+    gazeState: 3, // Tracking Paused
   },
 ];
 
@@ -69,8 +69,8 @@ describe('CSV Generation Functions', () => {
       expect(getGazeStateDescription(2)).toBe('Calibrating');
     });
 
-    test('should return "Unknown (X)" for any other state', () => {
-      expect(getGazeStateDescription(3)).toBe('Unknown (3)');
+    test('should return "Tracking Paused" for state 3', () => {
+      expect(getGazeStateDescription(3)).toBe('Tracking Paused');
       expect(getGazeStateDescription(99)).toBe('Unknown (99)');
     });
   });
@@ -108,7 +108,7 @@ describe('CSV Generation Functions', () => {
       expect(lines[1].split(',')[5]).toBe('Valid');
       expect(lines[2].split(',')[5]).toBe('Invalid');
       expect(lines[3].split(',')[5]).toBe('Calibrating');
-      expect(lines[4].split(',')[5]).toBe('Unknown (3)');
+      expect(lines[4].split(',')[5]).toBe('Tracking Paused');
     });
 
     test('should include session ID in each row', () => {
@@ -138,7 +138,7 @@ describe('CSV Generation Functions', () => {
         { ...mockGazeData[0], timestamp: 1646735000000 }, // 0 seconds
         { ...mockGazeData[1], timestamp: 1646735060000 }, // 1 minute
         { ...mockGazeData[2], timestamp: 1646738600000 }, // 1 hour
-        { ...mockGazeData[3], timestamp: 1646821800000 }, // 24 hours + 10 minutes
+        { ...mockGazeData[3], timestamp: 1646821800000 }, // 24 hours + 6 minutes + 40 seconds
       ];
       
       const csv = generateCSV(longTimeData);
@@ -148,7 +148,7 @@ describe('CSV Generation Functions', () => {
       expect(lines[1].split(',')[2]).toBe('00:00:00.000'); // 0 seconds
       expect(lines[2].split(',')[2]).toBe('00:01:00.000'); // 1 minute
       expect(lines[3].split(',')[2]).toBe('01:00:00.000'); // 1 hour
-      expect(lines[4].split(',')[2]).toBe('24:10:00.000'); // 24 hours + 10 minutes
+      expect(lines[4].split(',')[2]).toBe('24:06:40.000'); // 24 hours + 6 minutes + 40 seconds
     });
   });
 }); 
