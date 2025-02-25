@@ -99,6 +99,29 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        .troubleshooting {
+            margin-top: 2rem;
+            text-align: left;
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+        }
+        .troubleshooting h3 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        .troubleshooting details {
+            margin-bottom: 1rem;
+        }
+        .troubleshooting summary {
+            cursor: pointer;
+            font-weight: bold;
+            color: #3498db;
+        }
+        .troubleshooting p {
+            margin: 0.5rem 0;
+            font-size: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -122,6 +145,25 @@
             <p>Current API Status: <span id="api-status">Checking...</span> <span id="loading-indicator" class="loading"></span></p>
         </div>
         
+        <div class="troubleshooting">
+            <h3>Troubleshooting</h3>
+            <details>
+                <summary>Network Issues</summary>
+                <p>The GazeRecorder API is loaded from <code>https://app.gazerecorder.com/GazeRecorderAPI.js</code>. Make sure your network allows connections to this domain.</p>
+                <p>If you're behind a corporate firewall or using a VPN, this might be blocked.</p>
+            </details>
+            <details>
+                <summary>Browser Compatibility</summary>
+                <p>GazeRecorder works best with Chrome, Firefox, and Edge. Safari may have limited support.</p>
+                <p>Make sure your browser is up to date.</p>
+            </details>
+            <details>
+                <summary>Content Blockers</summary>
+                <p>Ad blockers, privacy extensions, and content blockers might prevent the API from loading.</p>
+                <p>Try temporarily disabling these extensions for this site.</p>
+            </details>
+        </div>
+        
         <div class="buttons">
             <button id="reload-api" class="button">Reload API</button>
             <a href="index.html" class="button">Reload Page</a>
@@ -133,17 +175,42 @@
         // Function to load GazeRecorder API
         function loadGazeRecorderAPI() {
             return new Promise((resolve, reject) => {
+                // Check if API is already loaded
+                if (typeof GazeRecorder !== 'undefined') {
+                    console.log('GazeRecorder API already loaded');
+                    resolve();
+                    return;
+                }
+                
                 const script = document.createElement('script');
                 script.src = 'https://app.gazerecorder.com/GazeRecorderAPI.js';
                 script.async = true;
+                
+                // Set up timeout (10 seconds)
+                const timeoutId = setTimeout(() => {
+                    console.error('GazeRecorder API load timeout');
+                    reject(new Error('Timeout loading GazeRecorder API'));
+                }, 10000);
+                
                 script.onload = () => {
+                    clearTimeout(timeoutId);
                     console.log('GazeRecorder API loaded successfully');
-                    resolve();
+                    
+                    // Verify the API is actually available
+                    if (typeof GazeRecorder !== 'undefined') {
+                        resolve();
+                    } else {
+                        console.error('GazeRecorder API loaded but not available');
+                        reject(new Error('GazeRecorder API loaded but not available'));
+                    }
                 };
+                
                 script.onerror = () => {
+                    clearTimeout(timeoutId);
                     console.error('Failed to load GazeRecorder API');
                     reject(new Error('Failed to load GazeRecorder API'));
                 };
+                
                 document.head.appendChild(script);
             });
         }
@@ -166,29 +233,50 @@
             }
         }
         
-        // Try to load the API
-        loadGazeRecorderAPI()
-            .then(() => {
-                checkAPIStatus();
-                if (checkAPIStatus()) {
-                    // Set flag to indicate we're coming from the error page
-                    sessionStorage.setItem('from_error_page', 'true');
-                    // Redirect to main page if API is available
-                    setTimeout(() => {
-                        window.location.href = 'index.html';
-                    }, 1000);
-                }
-            })
-            .catch(error => {
-                console.error('Error loading API:', error);
-                checkAPIStatus();
-            });
+        // Try to load the API with multiple attempts
+        let apiLoadAttempts = 0;
+        const MAX_API_LOAD_ATTEMPTS = 3;
+        
+        function attemptApiLoad() {
+            apiLoadAttempts++;
+            console.log(`Attempting to load GazeRecorder API (${apiLoadAttempts}/${MAX_API_LOAD_ATTEMPTS})`);
+            
+            loadGazeRecorderAPI()
+                .then(() => {
+                    checkAPIStatus();
+                    if (checkAPIStatus()) {
+                        // Set flag to indicate we're coming from the error page
+                        sessionStorage.setItem('from_error_page', 'true');
+                        // Redirect to main page if API is available
+                        setTimeout(() => {
+                            window.location.href = 'index.html';
+                        }, 1000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading API:', error);
+                    checkAPIStatus();
+                    
+                    if (apiLoadAttempts < MAX_API_LOAD_ATTEMPTS) {
+                        // Try again after a delay with exponential backoff
+                        const delay = Math.min(1000 * Math.pow(2, apiLoadAttempts - 1), 8000);
+                        console.log(`Retrying in ${delay}ms...`);
+                        setTimeout(attemptApiLoad, delay);
+                    }
+                });
+        }
+        
+        // Start the loading process
+        attemptApiLoad();
         
         // Set up reload button
         document.getElementById('reload-api').addEventListener('click', () => {
             const button = document.getElementById('reload-api');
             button.textContent = 'Loading...';
             button.disabled = true;
+            
+            // Reset attempts counter
+            apiLoadAttempts = 0;
             
             loadGazeRecorderAPI()
                 .then(() => {

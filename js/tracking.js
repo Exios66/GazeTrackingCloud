@@ -12,7 +12,8 @@ const GazeTracker = (() => {
     let durationInterval = null;
     let allGazeData = []; // Store all gaze data for the current session
     let apiLoadAttempts = 0;
-    const MAX_API_LOAD_ATTEMPTS = 3;
+    const MAX_API_LOAD_ATTEMPTS = 5; // Increased from 3 to 5
+    const API_LOAD_TIMEOUT = 10000; // 10 seconds timeout
     
     // DOM elements
     let gazeXElement = null;
@@ -48,26 +49,39 @@ const GazeTracker = (() => {
     const checkAndInitializeAPI = () => {
         if (typeof GazeRecorder !== 'undefined') {
             // API is loaded, set up event listeners
-            GazeRecorder.setGazeListener(handleGazeData);
-            GazeRecorder.setCalibrationEndListener(handleCalibrationEnd);
-            console.log('GazeRecorder API initialized successfully');
-            showStatusMessage('GazeRecorder API loaded successfully. Click "Start Tracking" to begin.');
-            return true;
+            try {
+                GazeRecorder.setGazeListener(handleGazeData);
+                GazeRecorder.setCalibrationEndListener(handleCalibrationEnd);
+                console.log('GazeRecorder API initialized successfully');
+                showStatusMessage('GazeRecorder API loaded successfully. Click "Start Tracking" to begin.');
+                return true;
+            } catch (error) {
+                console.error('Error initializing GazeRecorder API:', error);
+                showError('Error initializing GazeRecorder API. Please refresh the page.');
+                return false;
+            }
         } else {
             apiLoadAttempts++;
             console.error(`GazeRecorder API not found. Attempt ${apiLoadAttempts} of ${MAX_API_LOAD_ATTEMPTS}`);
             
             if (apiLoadAttempts < MAX_API_LOAD_ATTEMPTS) {
-                // Try to reload the API
+                // Try to reload the API with exponential backoff
+                const delay = Math.min(1000 * Math.pow(2, apiLoadAttempts - 1), 8000);
                 showStatusMessage(`Loading GazeRecorder API... Attempt ${apiLoadAttempts} of ${MAX_API_LOAD_ATTEMPTS}`);
-                loadGazeRecorderAPI().then(() => {
-                    checkAndInitializeAPI();
-                }).catch(error => {
-                    console.error('Failed to load GazeRecorder API:', error);
-                    if (apiLoadAttempts >= MAX_API_LOAD_ATTEMPTS) {
-                        redirectToErrorPage();
-                    }
-                });
+                
+                setTimeout(() => {
+                    loadGazeRecorderAPI().then(() => {
+                        checkAndInitializeAPI();
+                    }).catch(error => {
+                        console.error('Failed to load GazeRecorder API:', error);
+                        if (apiLoadAttempts >= MAX_API_LOAD_ATTEMPTS) {
+                            redirectToErrorPage();
+                        } else {
+                            checkAndInitializeAPI(); // Try again
+                        }
+                    });
+                }, delay);
+                
                 return false;
             } else {
                 redirectToErrorPage();
@@ -95,16 +109,46 @@ const GazeTracker = (() => {
      */
     const loadGazeRecorderAPI = () => {
         return new Promise((resolve, reject) => {
+            // Check if API is already loaded
+            if (typeof GazeRecorder !== 'undefined') {
+                console.log('GazeRecorder API already loaded');
+                resolve();
+                return;
+            }
+            
+            // Create script element
             const script = document.createElement('script');
             script.src = 'https://app.gazerecorder.com/GazeRecorderAPI.js';
             script.async = true;
+            
+            // Set up timeout
+            const timeoutId = setTimeout(() => {
+                console.error('GazeRecorder API load timeout');
+                reject(new Error('Timeout loading GazeRecorder API'));
+            }, API_LOAD_TIMEOUT);
+            
+            // Set up load handler
             script.onload = () => {
+                clearTimeout(timeoutId);
                 console.log('GazeRecorder API loaded successfully');
-                resolve();
+                
+                // Verify the API is actually available
+                if (typeof GazeRecorder !== 'undefined') {
+                    resolve();
+                } else {
+                    console.error('GazeRecorder API loaded but not available');
+                    reject(new Error('GazeRecorder API loaded but not available'));
+                }
             };
+            
+            // Set up error handler
             script.onerror = () => {
+                clearTimeout(timeoutId);
+                console.error('Failed to load GazeRecorder API');
                 reject(new Error('Failed to load GazeRecorder API'));
             };
+            
+            // Add script to document
             document.head.appendChild(script);
         });
     };
