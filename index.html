@@ -5,8 +5,86 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GazeTrackingCloud</title>
     <link rel="stylesheet" href="css/styles.css">
-    <!-- GazeRecorder API -->
-    <script src="https://app.gazerecorder.com/GazeRecorderAPI.js"></script>
+    <!-- GazeRecorder API with fallback -->
+    <script>
+        // Function to load GazeRecorder API with retry mechanism
+        function loadGazeRecorderAPI() {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://app.gazerecorder.com/GazeRecorderAPI.js';
+                script.async = true;
+                script.onload = () => {
+                    console.log('GazeRecorder API loaded successfully');
+                    // Clear any previous failure flag
+                    sessionStorage.removeItem('gazerecorder_api_failed');
+                    resolve();
+                };
+                script.onerror = () => {
+                    console.error('Failed to load GazeRecorder API');
+                    reject(new Error('Failed to load GazeRecorder API'));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        // Try to load the API immediately
+        let apiLoadAttempts = 0;
+        const MAX_API_LOAD_ATTEMPTS = 3;
+        
+        function attemptApiLoad() {
+            apiLoadAttempts++;
+            console.log(`Attempting to load GazeRecorder API (${apiLoadAttempts}/${MAX_API_LOAD_ATTEMPTS})`);
+            
+            loadGazeRecorderAPI().catch(error => {
+                console.error('API load failed:', error);
+                
+                if (apiLoadAttempts < MAX_API_LOAD_ATTEMPTS) {
+                    // Try again after a short delay
+                    setTimeout(attemptApiLoad, 1000);
+                } else {
+                    console.error('Failed to load GazeRecorder API after multiple attempts');
+                    // Set a flag to indicate API loading failure
+                    sessionStorage.setItem('gazerecorder_api_failed', 'true');
+                    // Redirect to error page
+                    window.location.href = 'api-error.html';
+                }
+            });
+        }
+        
+        // Start the loading process
+        attemptApiLoad();
+        
+        // Check if we were redirected from the error page and API is now available
+        window.addEventListener('DOMContentLoaded', () => {
+            if (sessionStorage.getItem('from_error_page') === 'true') {
+                sessionStorage.removeItem('from_error_page');
+                if (typeof GazeRecorder !== 'undefined') {
+                    // Show a success message
+                    const messageElement = document.createElement('div');
+                    messageElement.id = 'api-success-message';
+                    messageElement.textContent = 'GazeRecorder API loaded successfully!';
+                    messageElement.style.position = 'fixed';
+                    messageElement.style.bottom = '20px';
+                    messageElement.style.left = '50%';
+                    messageElement.style.transform = 'translateX(-50%)';
+                    messageElement.style.backgroundColor = '#2ecc71';
+                    messageElement.style.color = 'white';
+                    messageElement.style.padding = '10px 20px';
+                    messageElement.style.borderRadius = '4px';
+                    messageElement.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+                    messageElement.style.zIndex = '1000';
+                    document.body.appendChild(messageElement);
+                    
+                    // Remove the message after a few seconds
+                    setTimeout(() => {
+                        if (messageElement.parentNode) {
+                            messageElement.parentNode.removeChild(messageElement);
+                        }
+                    }, 5000);
+                }
+            }
+        });
+    </script>
     <!-- Chart.js for visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- heatmap.js for gaze heatmaps -->
@@ -21,6 +99,7 @@
                 <li><a href="#" id="stop-tracking">Stop Tracking</a></li>
                 <li><a href="#" id="show-heatmap">Show Heatmap</a></li>
                 <li><a href="#" id="export-data">Export Data</a></li>
+                <li><a href="#" id="reload-api" title="Reload GazeRecorder API">Reload API</a></li>
             </ul>
         </nav>
     </header>
@@ -69,6 +148,18 @@
         <section id="visualization">
             <h2>Gaze Patterns</h2>
             <canvas id="gaze-chart"></canvas>
+        </section>
+        
+        <section id="api-status" class="status-card">
+            <h3>API Status</h3>
+            <div class="status-indicator">
+                <span id="api-status-indicator" class="status-dot"></span>
+                <span id="api-status-text">Checking API status...</span>
+            </div>
+            <div class="status-actions">
+                <button id="check-api-status" class="status-button">Check API Status</button>
+                <a href="index.html" class="status-button">Reload Page</a>
+            </div>
         </section>
     </main>
 

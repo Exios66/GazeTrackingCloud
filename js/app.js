@@ -26,12 +26,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize chart
     initializeChart();
     
-    // Check if GazeRecorder API is loaded
-    if (typeof GazeRecorder === 'undefined') {
-        showError('GazeRecorder API not loaded. Please check your internet connection and try again.');
-    } else {
-        GazeTracker.showStatusMessage('Application initialized. Click "Start Tracking" to begin.');
-    }
+    // Update API status
+    updateAPIStatus();
+    
+    // Set interval to check API status periodically
+    setInterval(updateAPIStatus, 5000);
     
     console.log('Application initialized');
 });
@@ -60,6 +59,11 @@ function setupEventListeners() {
     const startTrackingBtn = document.getElementById('start-tracking');
     startTrackingBtn.addEventListener('click', async (e) => {
         e.preventDefault();
+        
+        if (!GazeTracker.isAPIAvailable()) {
+            GazeTracker.showError('GazeRecorder API not loaded. Please reload the API and try again.');
+            return;
+        }
         
         if (!GazeTracker.isTrackingActive() && !GazeTracker.isCalibrationActive()) {
             // Disable button during calibration and tracking
@@ -152,6 +156,35 @@ function setupEventListeners() {
         }
     });
     
+    // Reload API button
+    const reloadAPIBtn = document.getElementById('reload-api');
+    reloadAPIBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        
+        reloadAPIBtn.classList.add('disabled');
+        reloadAPIBtn.textContent = 'Loading...';
+        
+        try {
+            await GazeTracker.loadGazeRecorderAPI();
+            GazeTracker.checkAndInitializeAPI();
+            updateAPIStatus();
+            GazeTracker.showStatusMessage('GazeRecorder API reloaded successfully');
+        } catch (error) {
+            console.error('Error reloading API:', error);
+            GazeTracker.showError('Failed to reload GazeRecorder API. Please check your internet connection and try again.');
+        } finally {
+            reloadAPIBtn.classList.remove('disabled');
+            reloadAPIBtn.textContent = 'Reload API';
+        }
+    });
+    
+    // Check API status button
+    const checkAPIStatusBtn = document.getElementById('check-api-status');
+    checkAPIStatusBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        updateAPIStatus();
+    });
+    
     // Add keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         // ESC key to stop tracking
@@ -159,6 +192,22 @@ function setupEventListeners() {
             stopTrackingBtn.click();
         }
     });
+}
+
+/**
+ * Update API status indicator
+ */
+function updateAPIStatus() {
+    const statusIndicator = document.getElementById('api-status-indicator');
+    const statusText = document.getElementById('api-status-text');
+    
+    if (GazeTracker.isAPIAvailable()) {
+        statusIndicator.className = 'status-dot status-online';
+        statusText.textContent = 'GazeRecorder API is loaded and ready';
+    } else {
+        statusIndicator.className = 'status-dot status-offline';
+        statusText.textContent = 'GazeRecorder API is not loaded';
+    }
 }
 
 /**

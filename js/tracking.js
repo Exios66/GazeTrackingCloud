@@ -11,6 +11,8 @@ const GazeTracker = (() => {
     let startTime = null;
     let durationInterval = null;
     let allGazeData = []; // Store all gaze data for the current session
+    let apiLoadAttempts = 0;
+    const MAX_API_LOAD_ATTEMPTS = 3;
     
     // DOM elements
     let gazeXElement = null;
@@ -34,17 +36,77 @@ const GazeTracker = (() => {
         sessionDurationElement = document.getElementById('session-duration');
         dataPointsElement = document.getElementById('data-points');
         
-        // Set up GazeRecorder event listeners
+        // Check if GazeRecorder API is loaded
+        checkAndInitializeAPI();
+        
+        console.log('Gaze tracker initialized');
+    };
+    
+    /**
+     * Check if GazeRecorder API is loaded and initialize it
+     */
+    const checkAndInitializeAPI = () => {
         if (typeof GazeRecorder !== 'undefined') {
+            // API is loaded, set up event listeners
             GazeRecorder.setGazeListener(handleGazeData);
             GazeRecorder.setCalibrationEndListener(handleCalibrationEnd);
             console.log('GazeRecorder API initialized successfully');
+            showStatusMessage('GazeRecorder API loaded successfully. Click "Start Tracking" to begin.');
+            return true;
         } else {
-            console.error('GazeRecorder API not found. Make sure the script is loaded correctly.');
-            showError('GazeRecorder API not found. Please check your internet connection and try again.');
+            apiLoadAttempts++;
+            console.error(`GazeRecorder API not found. Attempt ${apiLoadAttempts} of ${MAX_API_LOAD_ATTEMPTS}`);
+            
+            if (apiLoadAttempts < MAX_API_LOAD_ATTEMPTS) {
+                // Try to reload the API
+                showStatusMessage(`Loading GazeRecorder API... Attempt ${apiLoadAttempts} of ${MAX_API_LOAD_ATTEMPTS}`);
+                loadGazeRecorderAPI().then(() => {
+                    checkAndInitializeAPI();
+                }).catch(error => {
+                    console.error('Failed to load GazeRecorder API:', error);
+                    if (apiLoadAttempts >= MAX_API_LOAD_ATTEMPTS) {
+                        redirectToErrorPage();
+                    }
+                });
+                return false;
+            } else {
+                redirectToErrorPage();
+                return false;
+            }
         }
-        
-        console.log('Gaze tracker initialized');
+    };
+    
+    /**
+     * Redirect to the API error page
+     */
+    const redirectToErrorPage = () => {
+        showError('GazeRecorder API could not be loaded. Redirecting to error page...');
+        // Save a flag in sessionStorage to indicate API loading failure
+        sessionStorage.setItem('gazerecorder_api_failed', 'true');
+        // Redirect after a short delay to allow the error message to be seen
+        setTimeout(() => {
+            window.location.href = 'api-error.html';
+        }, 2000);
+    };
+    
+    /**
+     * Load the GazeRecorder API dynamically
+     * @returns {Promise} - Resolves when the API is loaded
+     */
+    const loadGazeRecorderAPI = () => {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://app.gazerecorder.com/GazeRecorderAPI.js';
+            script.async = true;
+            script.onload = () => {
+                console.log('GazeRecorder API loaded successfully');
+                resolve();
+            };
+            script.onerror = () => {
+                reject(new Error('Failed to load GazeRecorder API'));
+            };
+            document.head.appendChild(script);
+        });
     };
     
     /**
@@ -53,6 +115,12 @@ const GazeTracker = (() => {
     const startTracking = async () => {
         if (isTracking) {
             console.warn('Tracking is already active');
+            return;
+        }
+        
+        // Check if API is loaded
+        if (!checkAndInitializeAPI()) {
+            showError('GazeRecorder API not loaded. Please wait for it to load or refresh the page.');
             return;
         }
         
@@ -135,6 +203,12 @@ const GazeTracker = (() => {
     const startCalibration = () => {
         if (isCalibrating) {
             console.warn('Calibration is already in progress');
+            return;
+        }
+        
+        // Check if API is loaded
+        if (!checkAndInitializeAPI()) {
+            showError('GazeRecorder API not loaded. Please wait for it to load or refresh the page.');
             return;
         }
         
@@ -462,6 +536,14 @@ const GazeTracker = (() => {
         return currentSessionId;
     };
     
+    /**
+     * Check if GazeRecorder API is available
+     * @returns {boolean} - True if GazeRecorder API is available
+     */
+    const isAPIAvailable = () => {
+        return typeof GazeRecorder !== 'undefined';
+    };
+    
     return {
         init,
         startTracking,
@@ -474,6 +556,9 @@ const GazeTracker = (() => {
         isCalibrationActive,
         getCurrentSessionId,
         showStatusMessage,
-        showError
+        showError,
+        isAPIAvailable,
+        loadGazeRecorderAPI,
+        checkAndInitializeAPI
     };
 })(); 

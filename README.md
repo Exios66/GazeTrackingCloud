@@ -19,19 +19,43 @@ A web application for eye tracking using the GazeRecorder API. This application 
 - A modern web browser (Chrome, Firefox, Edge)
 - Webcam access
 
+### Quick Start
+
+#### On macOS/Linux
+
+```
+./start.sh
+```
+
+#### On Windows
+
+```
+start.bat
+```
+
+These scripts will:
+
+1. Check if Node.js and npm are installed
+2. Install dependencies if needed
+3. Create the data directory if it doesn't exist
+4. Start the server
+5. Open the application in your default browser
+
 ### Installation
 
 1. Clone this repository:
+
    ```
-   git clone https://github.com/yourusername/GazeTrackingCloud.git
+   git clone https://github.com/GazeTrackingCloud/GazeTrackingCloud.git
    cd GazeTrackingCloud
    ```
 
 2. Run the setup script:
+
    ```
    npm run setup
    ```
-   
+
    This script will:
    - Check if Node.js is installed
    - Create the data directory if it doesn't exist
@@ -41,35 +65,41 @@ A web application for eye tracking using the GazeRecorder API. This application 
 ### Running the Application
 
 Simply run:
+
 ```
 npm start
 ```
 
 This command will:
+
 1. Start the local server
 2. Automatically open the application in your default browser
-3. Navigate to http://localhost:3000
+3. Navigate to <http://localhost:3000>
 
 ### Manual Installation (Alternative)
 
 If you prefer to install manually:
 
 1. Install dependencies:
+
    ```
    npm install
    ```
 
 2. Create data directory:
+
    ```
    npm run build
    ```
 
 3. Start the server:
+
    ```
    npm run server
    ```
 
 4. Open in browser:
+
    ```
    http://localhost:3000
    ```
@@ -86,12 +116,14 @@ If you prefer to install manually:
 ### Data Storage
 
 All gaze tracking data is stored in two locations:
+
 - Browser's IndexedDB for client-side storage
 - Server's `data` directory in JSON format (organized by session)
 
 ## Development
 
 To run the application in development mode with auto-reload:
+
 ```
 npm run dev
 ```
@@ -107,6 +139,7 @@ npm run dev
 ## API Reference
 
 This project uses the GazeRecorder API available at:
+
 - <https://app.gazerecorder.com/GazeRecorderAPI.js>
 - Documentation: <https://gazerecorder.com/gazerecorder-api/>
 
