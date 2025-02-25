@@ -84,6 +84,16 @@ document.createElement = jest.fn().mockImplementation((tag) => {
   return element;
 });
 
+// Mock MutationObserver
+global.MutationObserver = jest.fn().mockImplementation((callback) => {
+  return {
+    observe: jest.fn(),
+    disconnect: jest.fn(),
+    takeRecords: jest.fn(),
+    callback
+  };
+});
+
 // Import the tracking module
 const fs = require('fs');
 const path = require('path');
