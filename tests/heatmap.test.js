@@ -250,12 +250,17 @@ document.getElementById = jest.fn().mockImplementation((id) => {
 
 // Mock document.createElement
 document.createElement = jest.fn().mockImplementation((tag) => {
+  if (tag === 'a') {
+    return {
+      href: '',
+      download: '',
+      click: jest.fn(),
+      style: {}
+    };
+  }
   return {
     style: {},
     id: '',
-    href: '',
-    download: '',
-    click: jest.fn(),
     toDataURL: jest.fn().mockReturnValue('data:image/png;base64,mockbase64data')
   };
 });
@@ -455,7 +460,9 @@ describe('Heatmap Module Tests', () => {
   describe('generateFromData', () => {
     test('should generate heatmap from gaze data', () => {
       GazeHeatmap.init();
+      GazeHeatmap.clear = jest.fn();
       GazeHeatmap.addGazePoint = jest.fn();
+      GazeHeatmap.show = jest.fn();
       
       const gazeData = [
         { gazeX: 100, gazeY: 200, gazeState: 0 },
