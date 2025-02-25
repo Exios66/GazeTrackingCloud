@@ -2,25 +2,13 @@
  * Tests for tracking functions
  */
 
-// Import the tracking module
+// Import the fs and path modules
 const fs = require('fs');
 const path = require('path');
 
 // Read the tracking.js file
 const trackingJsPath = path.resolve(__dirname, '../js/tracking.js');
 const trackingJsContent = fs.readFileSync(trackingJsPath, 'utf8');
-
-// Extract the handleGazeData function using regex
-const handleGazeDataMatch = trackingJsContent.match(/const\s+handleGazeData\s*=\s*\(\s*gazeData\s*\)\s*=>\s*{([\s\S]*?)};/);
-const handleGazeDataBody = handleGazeDataMatch ? handleGazeDataMatch[1] : '';
-
-// Extract the updateDataPointsDisplay function using regex
-const updateDataPointsDisplayMatch = trackingJsContent.match(/const\s+updateDataPointsDisplay\s*=\s*\(\s*\)\s*=>\s*{([\s\S]*?)};/);
-const updateDataPointsDisplayBody = updateDataPointsDisplayMatch ? updateDataPointsDisplayMatch[1] : '';
-
-// Extract the updateDurationDisplay function using regex
-const updateDurationDisplayMatch = trackingJsContent.match(/const\s+updateDurationDisplay\s*=\s*\(\s*\)\s*=>\s*{([\s\S]*?)};/);
-const updateDurationDisplayBody = updateDurationDisplayMatch ? updateDurationDisplayMatch[1] : '';
 
 // Mock DOM elements
 const mockElements = {
@@ -39,16 +27,55 @@ const mockElements = {
   'api-status-indicator': { 
     style: { backgroundColor: '' },
     textContent: ''
+  },
+  'api-status-text': {
+    textContent: ''
+  },
+  'check-api-status': {
+    addEventListener: jest.fn()
+  },
+  'heatmap-container': {
+    appendChild: jest.fn()
   }
 };
 
 // Mock document.getElementById
 document.getElementById = jest.fn().mockImplementation((id) => {
-  return mockElements[id] || { textContent: '', style: {} };
+  return mockElements[id] || { textContent: '', style: {}, addEventListener: jest.fn() };
 });
 
-// Create a simple test for handleGazeData
-describe('Tracking Functions', () => {
+// Mock document.querySelector
+document.querySelector = jest.fn().mockImplementation((selector) => {
+  if (selector === '.recording-indicator') {
+    return {
+      parentNode: {
+        removeChild: jest.fn()
+      }
+    };
+  }
+  return null;
+});
+
+// Extract the GazeTracker module using regex
+const gazeTrackerMatch = trackingJsContent.match(/const GazeTracker = \(\(\) => {([\s\S]*?)\}\)\(\);/);
+const gazeTrackerBody = gazeTrackerMatch ? gazeTrackerMatch[1] : '';
+
+// Create a function to evaluate the GazeTracker module
+const evaluateGazeTracker = () => {
+  // Create a new function that returns the GazeTracker object
+  const GazeTrackerFunction = new Function(`
+    const GazeTracker = (() => {${gazeTrackerBody}})();
+    return GazeTracker;
+  `);
+  
+  // Execute the function to get the GazeTracker object
+  return GazeTrackerFunction();
+};
+
+// Get the GazeTracker object
+let GazeTracker;
+
+describe('Tracking Module Tests', () => {
   beforeEach(() => {
     // Reset all mocks before each test
     jest.clearAllMocks();
@@ -61,36 +88,194 @@ describe('Tracking Functions', () => {
     mockElements['head-z'].textContent = '';
     mockElements['session-duration'].textContent = '';
     mockElements['data-points'].textContent = '';
+    mockElements['api-status-text'].textContent = '';
+    
+    // Reset GazeCloudAPI mock
+    global.GazeCloudAPI = {
+      StartEyeTracking: jest.fn(),
+      StopEyeTracking: jest.fn(),
+      SetVideoContainerElement: jest.fn(),
+      UseClickRecalibration: true,
+      OnResult: null,
+      OnCalibrationComplete: null,
+      OnCamDenied: null,
+      OnError: null,
+    };
+    
+    // Reset GazeDB mock
+    global.GazeDB = {
+      init: jest.fn().mockResolvedValue(true),
+      createSession: jest.fn().mockResolvedValue('test-session-id'),
+      endSession: jest.fn().mockResolvedValue(true),
+      getSessionData: jest.fn().mockResolvedValue([]),
+      saveGazeData: jest.fn().mockResolvedValue(true),
+      getAllSessions: jest.fn().mockResolvedValue([]),
+      deleteSession: jest.fn().mockResolvedValue(true),
+    };
+    
+    // Reset GazeHeatmap mock
+    global.GazeHeatmap = {
+      init: jest.fn(),
+      addGazePoint: jest.fn(),
+      show: jest.fn(),
+      hide: jest.fn(),
+      clear: jest.fn(),
+      exportAsImage: jest.fn().mockReturnValue('mock-image-data'),
+      saveAsImage: jest.fn(),
+      generateFromData: jest.fn(),
+      generateSummary: jest.fn().mockReturnValue({
+        pointCount: 100,
+        averageValue: 0.5,
+        maxValue: 1.0,
+        coverage: 25,
+      }),
+    };
+    
+    // Get a fresh instance of GazeTracker for each test
+    GazeTracker = evaluateGazeTracker();
+  });
+  
+  describe('isAPIAvailable', () => {
+    test('should return true when GazeCloudAPI is defined', () => {
+      expect(GazeTracker.isAPIAvailable()).toBe(true);
+    });
+    
+    test('should return false when GazeCloudAPI is undefined', () => {
+      // Temporarily remove GazeCloudAPI from global scope
+      const tempGazeCloudAPI = global.GazeCloudAPI;
+      delete global.GazeCloudAPI;
+      
+      expect(GazeTracker.isAPIAvailable()).toBe(false);
+      
+      // Restore GazeCloudAPI
+      global.GazeCloudAPI = tempGazeCloudAPI;
+    });
+  });
+  
+  describe('updateAPIStatusDisplay', () => {
+    test('should update status indicator when API is available', () => {
+      GazeTracker.updateAPIStatusDisplay();
+      
+      expect(mockElements['api-status-indicator'].style.backgroundColor).toBe('#2ecc71');
+      expect(mockElements['api-status-text'].textContent).toBe('API Available');
+    });
+    
+    test('should update status indicator when API is not available', () => {
+      // Temporarily remove GazeCloudAPI from global scope
+      const tempGazeCloudAPI = global.GazeCloudAPI;
+      delete global.GazeCloudAPI;
+      
+      GazeTracker.updateAPIStatusDisplay();
+      
+      expect(mockElements['api-status-indicator'].style.backgroundColor).toBe('#e74c3c');
+      expect(mockElements['api-status-text'].textContent).toBe('API Unavailable');
+      
+      // Restore GazeCloudAPI
+      global.GazeCloudAPI = tempGazeCloudAPI;
+    });
+    
+    test('should add recording indicator when tracking is active', () => {
+      // Set isTracking to true
+      GazeTracker.startTracking();
+      
+      GazeTracker.updateAPIStatusDisplay();
+      
+      expect(mockElements['api-status-text'].textContent).toContain('Tracking Active');
+      expect(document.createElement).toHaveBeenCalledWith('div');
+      expect(mockElements['video-container'].appendChild).toHaveBeenCalled();
+    });
+  });
+  
+  describe('getGazeStateDescription', () => {
+    test('should return "Valid" for state 0', () => {
+      expect(GazeTracker.getGazeStateDescription(0)).toBe('Valid');
+    });
+
+    test('should return "Invalid" for state 1', () => {
+      expect(GazeTracker.getGazeStateDescription(1)).toBe('Invalid');
+    });
+
+    test('should return "Calibrating" for state 2', () => {
+      expect(GazeTracker.getGazeStateDescription(2)).toBe('Calibrating');
+    });
+
+    test('should return "Tracking Paused" for state 3', () => {
+      expect(GazeTracker.getGazeStateDescription(3)).toBe('Tracking Paused');
+    });
+
+    test('should return "Unknown (X)" for any other state', () => {
+      expect(GazeTracker.getGazeStateDescription(99)).toBe('Unknown (99)');
+    });
+  });
+  
+  describe('startTracking', () => {
+    test('should start tracking when API is available', async () => {
+      await GazeTracker.startTracking();
+      
+      expect(global.GazeCloudAPI.StartEyeTracking).toHaveBeenCalled();
+      expect(global.GazeDB.createSession).toHaveBeenCalled();
+    });
+    
+    test('should not start tracking when already tracking', async () => {
+      // Start tracking once
+      await GazeTracker.startTracking();
+      
+      // Reset mocks
+      jest.clearAllMocks();
+      
+      // Try to start tracking again
+      await GazeTracker.startTracking();
+      
+      // Should not call StartEyeTracking again
+      expect(global.GazeCloudAPI.StartEyeTracking).not.toHaveBeenCalled();
+    });
+    
+    test('should attempt to load API when not available', async () => {
+      // Temporarily remove GazeCloudAPI from global scope
+      const tempGazeCloudAPI = global.GazeCloudAPI;
+      delete global.GazeCloudAPI;
+      
+      // Mock loadGazeCloudAPI to restore GazeCloudAPI
+      const originalLoadGazeCloudAPI = GazeTracker.loadGazeCloudAPI;
+      GazeTracker.loadGazeCloudAPI = jest.fn().mockImplementation(() => {
+        global.GazeCloudAPI = tempGazeCloudAPI;
+        return Promise.resolve();
+      });
+      
+      await GazeTracker.startTracking();
+      
+      expect(GazeTracker.loadGazeCloudAPI).toHaveBeenCalled();
+      expect(global.GazeCloudAPI.StartEyeTracking).toHaveBeenCalled();
+      
+      // Restore original function
+      GazeTracker.loadGazeCloudAPI = originalLoadGazeCloudAPI;
+    });
+  });
+  
+  describe('stopTracking', () => {
+    test('should stop tracking when tracking is active', async () => {
+      // Start tracking first
+      await GazeTracker.startTracking();
+      
+      // Reset mocks
+      jest.clearAllMocks();
+      
+      await GazeTracker.stopTracking();
+      
+      expect(global.GazeCloudAPI.StopEyeTracking).toHaveBeenCalled();
+      expect(global.GazeDB.endSession).toHaveBeenCalled();
+    });
+    
+    test('should not stop tracking when not tracking', async () => {
+      await GazeTracker.stopTracking();
+      
+      expect(global.GazeCloudAPI.StopEyeTracking).not.toHaveBeenCalled();
+      expect(global.GazeDB.endSession).not.toHaveBeenCalled();
+    });
   });
   
   describe('handleGazeData', () => {
     test('should update UI elements with gaze data', () => {
-      // Create a simplified version of handleGazeData for testing
-      const handleGazeData = (gazeData) => {
-        // Update gaze display
-        mockElements['gaze-x'].textContent = gazeData.GazeX.toFixed(2);
-        mockElements['gaze-y'].textContent = gazeData.GazeY.toFixed(2);
-        
-        // Update head position display
-        mockElements['head-x'].textContent = gazeData.HeadX.toFixed(2);
-        mockElements['head-y'].textContent = gazeData.HeadY.toFixed(2);
-        mockElements['head-z'].textContent = gazeData.HeadZ.toFixed(2);
-        
-        // Return mock data for testing
-        return {
-          dataPointsCount: 1,
-          allGazeData: [{
-            gazeX: gazeData.GazeX,
-            gazeY: gazeData.GazeY,
-            headX: gazeData.HeadX,
-            headY: gazeData.HeadY,
-            headZ: gazeData.HeadZ,
-            gazeState: gazeData.state,
-            timestamp: Date.now()
-          }]
-        };
-      };
-      
       const mockGazeData = {
         GazeX: 100.5,
         GazeY: 200.5,
@@ -100,7 +285,8 @@ describe('Tracking Functions', () => {
         state: 0
       };
       
-      handleGazeData(mockGazeData);
+      // Call the handleGazeData function
+      GazeTracker.handleGazeData(mockGazeData);
       
       // Verify that UI elements were updated
       expect(mockElements['gaze-x'].textContent).toBe('100.50');
@@ -110,24 +296,7 @@ describe('Tracking Functions', () => {
       expect(mockElements['head-z'].textContent).toBe('0.70');
     });
     
-    test('should add gaze data to allGazeData array', () => {
-      // Create a simplified version of handleGazeData for testing
-      const handleGazeData = (gazeData) => {
-        // Return mock data for testing
-        return {
-          dataPointsCount: 1,
-          allGazeData: [{
-            gazeX: gazeData.GazeX,
-            gazeY: gazeData.GazeY,
-            headX: gazeData.HeadX,
-            headY: gazeData.HeadY,
-            headZ: gazeData.HeadZ,
-            gazeState: gazeData.state,
-            timestamp: Date.now()
-          }]
-        };
-      };
-      
+    test('should call GazeDB.saveGazeData and GazeHeatmap.addGazePoint', () => {
       const mockGazeData = {
         GazeX: 100.5,
         GazeY: 200.5,
@@ -137,134 +306,48 @@ describe('Tracking Functions', () => {
         state: 0
       };
       
-      const result = handleGazeData(mockGazeData);
+      GazeTracker.handleGazeData(mockGazeData);
       
-      // Verify that data was added to allGazeData
-      expect(result.allGazeData.length).toBe(1);
-      expect(result.allGazeData[0].gazeX).toBe(100.5);
-      expect(result.allGazeData[0].gazeY).toBe(200.5);
-      expect(result.allGazeData[0].headX).toBe(0.5);
-      expect(result.allGazeData[0].headY).toBe(0.3);
-      expect(result.allGazeData[0].headZ).toBe(0.7);
-      expect(result.allGazeData[0].gazeState).toBe(0);
-      expect(result.allGazeData[0].timestamp).toBeDefined();
-    });
-    
-    test('should increment dataPointsCount', () => {
-      // Create a simplified version of handleGazeData for testing
-      const handleGazeData = (gazeData) => {
-        // Return mock data for testing
-        return {
-          dataPointsCount: 1,
-          allGazeData: [{
-            gazeX: gazeData.GazeX,
-            gazeY: gazeData.GazeY,
-            headX: gazeData.HeadX,
-            headY: gazeData.HeadY,
-            headZ: gazeData.HeadZ,
-            gazeState: gazeData.state,
-            timestamp: Date.now()
-          }]
-        };
-      };
-      
-      const mockGazeData = {
-        GazeX: 100.5,
-        GazeY: 200.5,
-        HeadX: 0.5,
-        HeadY: 0.3,
-        HeadZ: 0.7,
-        state: 0
-      };
-      
-      const result = handleGazeData(mockGazeData);
-      
-      // Verify that dataPointsCount was incremented
-      expect(result.dataPointsCount).toBe(1);
-    });
-    
-    test('should call GazeDB.saveGazeData', () => {
-      // Create a simplified version of handleGazeData for testing
-      const handleGazeData = () => {
-        // Call GazeDB.saveGazeData
-        global.GazeDB.saveGazeData();
-        
-        // Return mock data for testing
-        return {
-          dataPointsCount: 1,
-          allGazeData: []
-        };
-      };
-      
-      const mockGazeData = {
-        GazeX: 100.5,
-        GazeY: 200.5,
-        HeadX: 0.5,
-        HeadY: 0.3,
-        HeadZ: 0.7,
-        state: 0
-      };
-      
-      handleGazeData(mockGazeData);
-      
-      // Verify that GazeDB.saveGazeData was called
       expect(global.GazeDB.saveGazeData).toHaveBeenCalled();
-    });
-    
-    test('should call GazeHeatmap.addGazePoint', () => {
-      // Create a simplified version of handleGazeData for testing
-      const handleGazeData = () => {
-        // Call GazeHeatmap.addGazePoint
-        global.GazeHeatmap.addGazePoint();
-        
-        // Return mock data for testing
-        return {
-          dataPointsCount: 1,
-          allGazeData: []
-        };
-      };
-      
-      const mockGazeData = {
-        GazeX: 100.5,
-        GazeY: 200.5,
-        HeadX: 0.5,
-        HeadY: 0.3,
-        HeadZ: 0.7,
-        state: 0
-      };
-      
-      handleGazeData(mockGazeData);
-      
-      // Verify that GazeHeatmap.addGazePoint was called
       expect(global.GazeHeatmap.addGazePoint).toHaveBeenCalled();
     });
   });
   
-  describe('updateDataPointsDisplay', () => {
-    test('should update dataPointsElement with formatted count', () => {
-      // Create a simplified version of updateDataPointsDisplay for testing
-      const updateDataPointsDisplay = () => {
-        mockElements['data-points'].textContent = '100';
-      };
+  describe('generateCSV', () => {
+    test('should generate CSV data from gaze data', () => {
+      const mockGazeData = [
+        {
+          gazeX: 100.5,
+          gazeY: 200.5,
+          headX: 0.5,
+          headY: 0.3,
+          headZ: 0.7,
+          gazeState: 0,
+          timestamp: 1646735000000
+        },
+        {
+          gazeX: 150.5,
+          gazeY: 250.5,
+          headX: 0.6,
+          headY: 0.4,
+          headZ: 0.8,
+          gazeState: 0,
+          timestamp: 1646735001000
+        }
+      ];
       
-      updateDataPointsDisplay();
+      const csvData = GazeTracker.generateCSV(mockGazeData);
       
-      // Verify that dataPointsElement was updated
-      expect(mockElements['data-points'].textContent).toBe('100');
+      expect(csvData).toContain('timestamp,gazeX,gazeY,headX,headY,headZ,gazeState');
+      expect(csvData).toContain('2022-03-08T10:30:00.000Z,100.50,200.50,0.50,0.30,0.70,Valid');
+      expect(csvData).toContain('2022-03-08T10:30:01.000Z,150.50,250.50,0.60,0.40,0.80,Valid');
     });
-  });
-  
-  describe('updateDurationDisplay', () => {
-    test('should update sessionDurationElement with formatted duration', () => {
-      // Create a simplified version of updateDurationDisplay for testing
-      const updateDurationDisplay = () => {
-        mockElements['session-duration'].textContent = '00:01:00';
-      };
+    
+    test('should handle empty gaze data', () => {
+      const csvData = GazeTracker.generateCSV([]);
       
-      updateDurationDisplay();
-      
-      // Verify that sessionDurationElement was updated
-      expect(mockElements['session-duration'].textContent).toBe('00:01:00');
+      expect(csvData).toContain('timestamp,gazeX,gazeY,headX,headY,headZ,gazeState');
+      expect(csvData.split('\n').length).toBe(2); // Header + empty line
     });
   });
 }); 
