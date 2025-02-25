@@ -9,6 +9,7 @@ yarn.lock
 # Data directory - ignore all files except .gitkeep
 data/*
 !data/.gitkeep
+!data/processing/
 
 # Environment variables
 .env
