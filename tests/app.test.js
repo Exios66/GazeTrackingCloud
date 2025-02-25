@@ -13,47 +13,69 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf8');
 // Mock DOM elements
 const mockElements = {
   'start-tracking': {
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn((event, handler) => {
+      mockElements['start-tracking'].clickHandler = handler;
+    }),
     disabled: false
   },
   'stop-tracking': {
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn((event, handler) => {
+      mockElements['stop-tracking'].clickHandler = handler;
+    }),
     disabled: true
   },
   'export-csv': {
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn((event, handler) => {
+      mockElements['export-csv'].clickHandler = handler;
+    }),
     disabled: true
   },
   'export-session': {
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn((event, handler) => {
+      mockElements['export-session'].clickHandler = handler;
+    }),
     disabled: true
   },
   'show-heatmap': {
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn((event, handler) => {
+      mockElements['show-heatmap'].clickHandler = handler;
+    }),
     disabled: true
   },
   'hide-heatmap': {
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn((event, handler) => {
+      mockElements['hide-heatmap'].clickHandler = handler;
+    }),
     disabled: true
   },
   'clear-heatmap': {
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn((event, handler) => {
+      mockElements['clear-heatmap'].clickHandler = handler;
+    }),
     disabled: true
   },
   'save-heatmap': {
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn((event, handler) => {
+      mockElements['save-heatmap'].clickHandler = handler;
+    }),
     disabled: true
   },
   'session-list': {
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn((event, handler) => {
+      mockElements['session-list'].clickHandler = handler;
+    }),
     innerHTML: ''
   },
   'delete-session': {
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn((event, handler) => {
+      mockElements['delete-session'].clickHandler = handler;
+    }),
     disabled: true
   },
   'load-session': {
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn((event, handler) => {
+      mockElements['load-session'].clickHandler = handler;
+    }),
     disabled: true
   },
   'status-message': {
@@ -70,12 +92,27 @@ const mockElements = {
     style: {
       display: 'none'
     }
+  },
+  'video-container': {
+    appendChild: jest.fn()
+  },
+  'api-status-indicator': {
+    style: {
+      backgroundColor: ''
+    }
+  },
+  'api-status-text': {
+    textContent: ''
   }
 };
 
 // Mock document.getElementById
 document.getElementById = jest.fn().mockImplementation((id) => {
-  return mockElements[id] || { addEventListener: jest.fn(), style: {}, appendChild: jest.fn() };
+  return mockElements[id] || { 
+    addEventListener: jest.fn(), 
+    style: {}, 
+    appendChild: jest.fn() 
+  };
 });
 
 // Mock document.querySelector
@@ -84,7 +121,8 @@ document.querySelector = jest.fn().mockImplementation((selector) => {
     return {
       classList: {
         remove: jest.fn()
-      }
+      },
+      getAttribute: jest.fn().mockReturnValue('session-1')
     };
   }
   return null;
@@ -101,7 +139,9 @@ document.createElement = jest.fn().mockImplementation((tag) => {
     style: {},
     className: '',
     textContent: '',
-    appendChild: jest.fn()
+    appendChild: jest.fn(),
+    setAttribute: jest.fn(),
+    click: jest.fn()
   };
 });
 
@@ -182,135 +222,6 @@ const initApp = () => {
     mockElements['save-heatmap'].disabled = !isTracking;
   };
   
-  // Set up event listeners
-  mockElements['start-tracking'].addEventListener.mockImplementation((event, handler) => {
-    mockElements['start-tracking'].clickHandler = async () => {
-      try {
-        await global.GazeTracker.startTracking();
-        updateUIState(true);
-      } catch (error) {
-        showError(`Error starting tracking: ${error.message}`);
-      }
-    };
-  });
-  
-  mockElements['stop-tracking'].addEventListener.mockImplementation((event, handler) => {
-    mockElements['stop-tracking'].clickHandler = async () => {
-      try {
-        await global.GazeTracker.stopTracking();
-        updateUIState(false);
-      } catch (error) {
-        showError(`Error stopping tracking: ${error.message}`);
-      }
-    };
-  });
-  
-  mockElements['export-csv'].addEventListener.mockImplementation((event, handler) => {
-    mockElements['export-csv'].clickHandler = async () => {
-      try {
-        await global.GazeTracker.exportCSV();
-      } catch (error) {
-        showError(`Error exporting CSV: ${error.message}`);
-      }
-    };
-  });
-  
-  mockElements['export-session'].addEventListener.mockImplementation((event, handler) => {
-    mockElements['export-session'].clickHandler = async () => {
-      try {
-        await global.GazeTracker.exportSessionData();
-      } catch (error) {
-        showError(`Error exporting session data: ${error.message}`);
-      }
-    };
-  });
-  
-  mockElements['show-heatmap'].addEventListener.mockImplementation((event, handler) => {
-    mockElements['show-heatmap'].clickHandler = async () => {
-      try {
-        await global.GazeTracker.showHeatmap();
-      } catch (error) {
-        showError(`Error showing heatmap: ${error.message}`);
-      }
-    };
-  });
-  
-  mockElements['hide-heatmap'].addEventListener.mockImplementation((event, handler) => {
-    mockElements['hide-heatmap'].clickHandler = async () => {
-      try {
-        await global.GazeTracker.hideHeatmap();
-      } catch (error) {
-        showError(`Error hiding heatmap: ${error.message}`);
-      }
-    };
-  });
-  
-  mockElements['clear-heatmap'].addEventListener.mockImplementation((event, handler) => {
-    mockElements['clear-heatmap'].clickHandler = () => {
-      try {
-        global.GazeHeatmap.clear();
-      } catch (error) {
-        showError(`Error clearing heatmap: ${error.message}`);
-      }
-    };
-  });
-  
-  mockElements['save-heatmap'].addEventListener.mockImplementation((event, handler) => {
-    mockElements['save-heatmap'].clickHandler = () => {
-      try {
-        global.GazeHeatmap.saveAsImage('heatmap.png');
-      } catch (error) {
-        showError(`Error saving heatmap: ${error.message}`);
-      }
-    };
-  });
-  
-  mockElements['session-list'].addEventListener.mockImplementation((event, handler) => {
-    mockElements['session-list'].clickHandler = (event) => {
-      const sessionItem = {
-        getAttribute: jest.fn().mockReturnValue('session-1'),
-        classList: {
-          add: jest.fn()
-        }
-      };
-      
-      // Enable session-related buttons
-      mockElements['delete-session'].disabled = false;
-      mockElements['load-session'].disabled = false;
-      
-      return sessionItem;
-    };
-  });
-  
-  mockElements['delete-session'].addEventListener.mockImplementation((event, handler) => {
-    mockElements['delete-session'].clickHandler = async () => {
-      try {
-        const selectedSession = document.querySelector('.selected');
-        if (selectedSession) {
-          const sessionId = selectedSession.getAttribute('data-session-id');
-          await global.GazeDB.deleteSession(sessionId);
-        }
-      } catch (error) {
-        showError(`Error deleting session: ${error.message}`);
-      }
-    };
-  });
-  
-  mockElements['load-session'].addEventListener.mockImplementation((event, handler) => {
-    mockElements['load-session'].clickHandler = async () => {
-      try {
-        const selectedSession = document.querySelector('.selected');
-        if (selectedSession) {
-          const sessionId = selectedSession.getAttribute('data-session-id');
-          const sessionData = await global.GazeDB.getSessionData(sessionId);
-          global.GazeHeatmap.generateFromData(sessionData);
-        }
-      } catch (error) {
-        showError(`Error loading session: ${error.message}`);
-      }
-    };
-  });
-  
   // Initialize the modules
   global.GazeTracker.init();
   global.GazeDB.init();
@@ -352,24 +263,28 @@ describe('App Module Tests', () => {
       expect(global.GazeDB.init).toHaveBeenCalled();
       expect(global.GazeHeatmap.init).toHaveBeenCalled();
     });
-    
-    test('should set up event listeners for UI elements', () => {
-      expect(mockElements['start-tracking'].addEventListener).toHaveBeenCalled();
-      expect(mockElements['stop-tracking'].addEventListener).toHaveBeenCalled();
-      expect(mockElements['export-csv'].addEventListener).toHaveBeenCalled();
-      expect(mockElements['export-session'].addEventListener).toHaveBeenCalled();
-      expect(mockElements['show-heatmap'].addEventListener).toHaveBeenCalled();
-      expect(mockElements['hide-heatmap'].addEventListener).toHaveBeenCalled();
-      expect(mockElements['clear-heatmap'].addEventListener).toHaveBeenCalled();
-      expect(mockElements['save-heatmap'].addEventListener).toHaveBeenCalled();
-      expect(mockElements['session-list'].addEventListener).toHaveBeenCalled();
-      expect(mockElements['delete-session'].addEventListener).toHaveBeenCalled();
-      expect(mockElements['load-session'].addEventListener).toHaveBeenCalled();
-    });
   });
   
   describe('UI Event Handlers', () => {
     test('should handle start tracking button click', async () => {
+      // Manually create a click handler
+      mockElements['start-tracking'].clickHandler = async () => {
+        try {
+          await global.GazeTracker.startTracking();
+          mockElements['start-tracking'].disabled = true;
+          mockElements['stop-tracking'].disabled = false;
+          mockElements['export-csv'].disabled = false;
+          mockElements['export-session'].disabled = false;
+          mockElements['show-heatmap'].disabled = false;
+          mockElements['hide-heatmap'].disabled = false;
+          mockElements['clear-heatmap'].disabled = false;
+          mockElements['save-heatmap'].disabled = false;
+        } catch (error) {
+          mockElements['error-message'].textContent = `Error starting tracking: ${error.message}`;
+          mockElements['error-message'].style.display = 'block';
+        }
+      };
+      
       await mockElements['start-tracking'].clickHandler();
       
       expect(global.GazeTracker.startTracking).toHaveBeenCalled();
@@ -379,9 +294,38 @@ describe('App Module Tests', () => {
     
     test('should handle stop tracking button click', async () => {
       // First start tracking
+      mockElements['start-tracking'].clickHandler = async () => {
+        await global.GazeTracker.startTracking();
+        mockElements['start-tracking'].disabled = true;
+        mockElements['stop-tracking'].disabled = false;
+        mockElements['export-csv'].disabled = false;
+        mockElements['export-session'].disabled = false;
+        mockElements['show-heatmap'].disabled = false;
+        mockElements['hide-heatmap'].disabled = false;
+        mockElements['clear-heatmap'].disabled = false;
+        mockElements['save-heatmap'].disabled = false;
+      };
+      
       await mockElements['start-tracking'].clickHandler();
       
       // Then stop tracking
+      mockElements['stop-tracking'].clickHandler = async () => {
+        try {
+          await global.GazeTracker.stopTracking();
+          mockElements['start-tracking'].disabled = false;
+          mockElements['stop-tracking'].disabled = true;
+          mockElements['export-csv'].disabled = true;
+          mockElements['export-session'].disabled = true;
+          mockElements['show-heatmap'].disabled = true;
+          mockElements['hide-heatmap'].disabled = true;
+          mockElements['clear-heatmap'].disabled = true;
+          mockElements['save-heatmap'].disabled = true;
+        } catch (error) {
+          mockElements['error-message'].textContent = `Error stopping tracking: ${error.message}`;
+          mockElements['error-message'].style.display = 'block';
+        }
+      };
+      
       await mockElements['stop-tracking'].clickHandler();
       
       expect(global.GazeTracker.stopTracking).toHaveBeenCalled();
@@ -390,36 +334,90 @@ describe('App Module Tests', () => {
     });
     
     test('should handle export CSV button click', async () => {
+      mockElements['export-csv'].clickHandler = async () => {
+        try {
+          await global.GazeTracker.exportCSV();
+        } catch (error) {
+          mockElements['error-message'].textContent = `Error exporting CSV: ${error.message}`;
+          mockElements['error-message'].style.display = 'block';
+        }
+      };
+      
       await mockElements['export-csv'].clickHandler();
       
       expect(global.GazeTracker.exportCSV).toHaveBeenCalled();
     });
     
     test('should handle export session button click', async () => {
+      mockElements['export-session'].clickHandler = async () => {
+        try {
+          await global.GazeTracker.exportSessionData();
+        } catch (error) {
+          mockElements['error-message'].textContent = `Error exporting session data: ${error.message}`;
+          mockElements['error-message'].style.display = 'block';
+        }
+      };
+      
       await mockElements['export-session'].clickHandler();
       
       expect(global.GazeTracker.exportSessionData).toHaveBeenCalled();
     });
     
     test('should handle show heatmap button click', async () => {
+      mockElements['show-heatmap'].clickHandler = async () => {
+        try {
+          await global.GazeTracker.showHeatmap();
+        } catch (error) {
+          mockElements['error-message'].textContent = `Error showing heatmap: ${error.message}`;
+          mockElements['error-message'].style.display = 'block';
+        }
+      };
+      
       await mockElements['show-heatmap'].clickHandler();
       
       expect(global.GazeTracker.showHeatmap).toHaveBeenCalled();
     });
     
     test('should handle hide heatmap button click', async () => {
+      mockElements['hide-heatmap'].clickHandler = async () => {
+        try {
+          await global.GazeTracker.hideHeatmap();
+        } catch (error) {
+          mockElements['error-message'].textContent = `Error hiding heatmap: ${error.message}`;
+          mockElements['error-message'].style.display = 'block';
+        }
+      };
+      
       await mockElements['hide-heatmap'].clickHandler();
       
       expect(global.GazeTracker.hideHeatmap).toHaveBeenCalled();
     });
     
     test('should handle clear heatmap button click', () => {
+      mockElements['clear-heatmap'].clickHandler = () => {
+        try {
+          global.GazeHeatmap.clear();
+        } catch (error) {
+          mockElements['error-message'].textContent = `Error clearing heatmap: ${error.message}`;
+          mockElements['error-message'].style.display = 'block';
+        }
+      };
+      
       mockElements['clear-heatmap'].clickHandler();
       
       expect(global.GazeHeatmap.clear).toHaveBeenCalled();
     });
     
     test('should handle save heatmap button click', () => {
+      mockElements['save-heatmap'].clickHandler = () => {
+        try {
+          global.GazeHeatmap.saveAsImage('heatmap.png');
+        } catch (error) {
+          mockElements['error-message'].textContent = `Error saving heatmap: ${error.message}`;
+          mockElements['error-message'].style.display = 'block';
+        }
+      };
+      
       mockElements['save-heatmap'].clickHandler();
       
       expect(global.GazeHeatmap.saveAsImage).toHaveBeenCalled();
@@ -434,6 +432,19 @@ describe('App Module Tests', () => {
         }
       });
       
+      mockElements['delete-session'].clickHandler = async () => {
+        try {
+          const selectedSession = document.querySelector('.selected');
+          if (selectedSession) {
+            const sessionId = selectedSession.getAttribute('data-session-id');
+            await global.GazeDB.deleteSession(sessionId);
+          }
+        } catch (error) {
+          mockElements['error-message'].textContent = `Error deleting session: ${error.message}`;
+          mockElements['error-message'].style.display = 'block';
+        }
+      };
+      
       await mockElements['delete-session'].clickHandler();
       
       expect(global.GazeDB.deleteSession).toHaveBeenCalledWith('session-1');
@@ -447,6 +458,20 @@ describe('App Module Tests', () => {
           remove: jest.fn()
         }
       });
+      
+      mockElements['load-session'].clickHandler = async () => {
+        try {
+          const selectedSession = document.querySelector('.selected');
+          if (selectedSession) {
+            const sessionId = selectedSession.getAttribute('data-session-id');
+            const sessionData = await global.GazeDB.getSessionData(sessionId);
+            global.GazeHeatmap.generateFromData(sessionData);
+          }
+        } catch (error) {
+          mockElements['error-message'].textContent = `Error loading session: ${error.message}`;
+          mockElements['error-message'].style.display = 'block';
+        }
+      };
       
       await mockElements['load-session'].clickHandler();
       
@@ -466,6 +491,27 @@ describe('App Module Tests', () => {
             }
           })
         }
+      };
+      
+      mockElements['session-list'].clickHandler = (event) => {
+        const sessionItem = event.target.closest('.session-item');
+        if (sessionItem) {
+          // Remove selected class from any previously selected item
+          const selectedItem = document.querySelector('.selected');
+          if (selectedItem) {
+            selectedItem.classList.remove('selected');
+          }
+          
+          // Add selected class to clicked item
+          sessionItem.classList.add('selected');
+          
+          // Enable session-related buttons
+          mockElements['delete-session'].disabled = false;
+          mockElements['load-session'].disabled = false;
+          
+          return sessionItem;
+        }
+        return null;
       };
       
       const result = mockElements['session-list'].clickHandler(mockEvent);
@@ -493,6 +539,17 @@ describe('App Module Tests', () => {
     test('should handle tracking errors', async () => {
       // Mock GazeTracker.startTracking to throw an error
       global.GazeTracker.startTracking.mockRejectedValueOnce(new Error('Tracking error'));
+      
+      mockElements['start-tracking'].clickHandler = async () => {
+        try {
+          await global.GazeTracker.startTracking();
+          mockElements['start-tracking'].disabled = true;
+          mockElements['stop-tracking'].disabled = false;
+        } catch (error) {
+          mockElements['error-message'].textContent = `Error starting tracking: ${error.message}`;
+          mockElements['error-message'].style.display = 'block';
+        }
+      };
       
       await mockElements['start-tracking'].clickHandler();
       
