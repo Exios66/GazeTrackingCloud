@@ -127,8 +127,8 @@
 <body>
     <div class="container">
         <h1>GazeTrackingCloud</h1>
-        <h2>GazeRecorder API Error</h2>
-        <p>The GazeRecorder API could not be loaded. This is required for the eye tracking functionality to work.</p>
+        <h2>GazeCloudAPI Error</h2>
+        <p>The GazeCloudAPI could not be loaded. This is required for the eye tracking functionality to work.</p>
         
         <div class="steps">
             <h3>Please try the following steps:</h3>
@@ -149,12 +149,12 @@
             <h3>Troubleshooting</h3>
             <details>
                 <summary>Network Issues</summary>
-                <p>The GazeRecorder API is loaded from <code>https://app.gazerecorder.com/GazeRecorderAPI.js</code>. Make sure your network allows connections to this domain.</p>
+                <p>The GazeCloudAPI is loaded from <code>https://api.gazerecorder.com/GazeCloudAPI.js</code>. Make sure your network allows connections to this domain.</p>
                 <p>If you're behind a corporate firewall or using a VPN, this might be blocked.</p>
             </details>
             <details>
                 <summary>Browser Compatibility</summary>
-                <p>GazeRecorder works best with Chrome, Firefox, and Edge. Safari may have limited support.</p>
+                <p>GazeCloudAPI works best with Chrome, Firefox, and Edge. Safari may have limited support.</p>
                 <p>Make sure your browser is up to date.</p>
             </details>
             <details>
@@ -162,53 +162,58 @@
                 <p>Ad blockers, privacy extensions, and content blockers might prevent the API from loading.</p>
                 <p>Try temporarily disabling these extensions for this site.</p>
             </details>
+            <details>
+                <summary>Camera Access</summary>
+                <p>GazeCloudAPI requires camera access to track your eyes. Make sure you've granted camera permissions to this site.</p>
+                <p>Check your browser settings if you previously denied camera access.</p>
+            </details>
         </div>
         
         <div class="buttons">
             <button id="reload-api" class="button">Reload API</button>
             <a href="index.html" class="button">Reload Page</a>
-            <a href="https://gazerecorder.com" target="_blank" rel="noopener" class="button secondary">Visit GazeRecorder</a>
+            <a href="https://github.com/szydej/GazeCloud" target="_blank" rel="noopener" class="button secondary">GazeCloud Documentation</a>
         </div>
     </div>
     
     <script>
-        // Function to load GazeRecorder API
-        function loadGazeRecorderAPI() {
+        // Function to load GazeCloudAPI
+        function loadGazeCloudAPI() {
             return new Promise((resolve, reject) => {
                 // Check if API is already loaded
-                if (typeof GazeRecorder !== 'undefined') {
-                    console.log('GazeRecorder API already loaded');
+                if (typeof GazeCloudAPI !== 'undefined') {
+                    console.log('GazeCloudAPI already loaded');
                     resolve();
                     return;
                 }
                 
                 const script = document.createElement('script');
-                script.src = 'https://app.gazerecorder.com/GazeRecorderAPI.js';
+                script.src = 'https://api.gazerecorder.com/GazeCloudAPI.js';
                 script.async = true;
                 
                 // Set up timeout (10 seconds)
                 const timeoutId = setTimeout(() => {
-                    console.error('GazeRecorder API load timeout');
-                    reject(new Error('Timeout loading GazeRecorder API'));
+                    console.error('GazeCloudAPI load timeout');
+                    reject(new Error('Timeout loading GazeCloudAPI'));
                 }, 10000);
                 
                 script.onload = () => {
                     clearTimeout(timeoutId);
-                    console.log('GazeRecorder API loaded successfully');
+                    console.log('GazeCloudAPI loaded successfully');
                     
                     // Verify the API is actually available
-                    if (typeof GazeRecorder !== 'undefined') {
+                    if (typeof GazeCloudAPI !== 'undefined') {
                         resolve();
                     } else {
-                        console.error('GazeRecorder API loaded but not available');
-                        reject(new Error('GazeRecorder API loaded but not available'));
+                        console.error('GazeCloudAPI loaded but not available');
+                        reject(new Error('GazeCloudAPI loaded but not available'));
                     }
                 };
                 
                 script.onerror = () => {
                     clearTimeout(timeoutId);
-                    console.error('Failed to load GazeRecorder API');
-                    reject(new Error('Failed to load GazeRecorder API'));
+                    console.error('Failed to load GazeCloudAPI');
+                    reject(new Error('Failed to load GazeCloudAPI'));
                 };
                 
                 document.head.appendChild(script);
@@ -220,7 +225,7 @@
             const statusElement = document.getElementById('api-status');
             const loadingIndicator = document.getElementById('loading-indicator');
             
-            if (typeof GazeRecorder !== 'undefined') {
+            if (typeof GazeCloudAPI !== 'undefined') {
                 statusElement.textContent = 'Available';
                 statusElement.style.color = '#2ecc71';
                 loadingIndicator.style.display = 'none';
@@ -239,9 +244,9 @@
         
         function attemptApiLoad() {
             apiLoadAttempts++;
-            console.log(`Attempting to load GazeRecorder API (${apiLoadAttempts}/${MAX_API_LOAD_ATTEMPTS})`);
+            console.log(`Attempting to load GazeCloudAPI (${apiLoadAttempts}/${MAX_API_LOAD_ATTEMPTS})`);
             
-            loadGazeRecorderAPI()
+            loadGazeCloudAPI()
                 .then(() => {
                     checkAPIStatus();
                     if (checkAPIStatus()) {
@@ -278,7 +283,7 @@
             // Reset attempts counter
             apiLoadAttempts = 0;
             
-            loadGazeRecorderAPI()
+            loadGazeCloudAPI()
                 .then(() => {
                     checkAPIStatus();
                     button.textContent = 'API Loaded!';
@@ -305,7 +310,7 @@
         setInterval(checkAPIStatus, 2000);
         
         // Check if we were redirected from the main page due to API failure
-        if (sessionStorage.getItem('gazerecorder_api_failed') === 'true') {
+        if (sessionStorage.getItem('gazecloud_api_failed') === 'true') {
             const statusElement = document.getElementById('api-status');
             statusElement.textContent = 'Failed to load after multiple attempts';
             statusElement.style.color = '#e74c3c';
