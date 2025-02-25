@@ -41,11 +41,18 @@ nav ul li a {
     color: white;
     text-decoration: none;
     padding: 0.5rem 0;
-    transition: color 0.3s;
+    transition: color 0.3s, opacity 0.3s;
+    cursor: pointer;
 }
 
 nav ul li a:hover {
     color: #3498db;
+}
+
+nav ul li a.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 /* Main Content */
@@ -104,6 +111,19 @@ section {
     background-color: red;
     border-radius: 50%;
     position: absolute;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.7);
+    animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+    from {
+        transform: scale(1);
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.7);
+    }
+    to {
+        transform: scale(1.2);
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.9);
+    }
 }
 
 .calibration-instructions {
@@ -113,6 +133,7 @@ section {
     padding: 1rem;
     background-color: rgba(0, 0, 0, 0.5);
     border-radius: 4px;
+    max-width: 80%;
 }
 
 /* Heatmap Container */
@@ -138,6 +159,12 @@ section {
     padding: 1.5rem;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.data-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .data-card h3 {
@@ -163,6 +190,39 @@ section {
 #gaze-chart {
     width: 100%;
     height: 300px;
+}
+
+/* Status Message */
+#status-message {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(52, 152, 219, 0.9);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 4px;
+    z-index: 1000;
+    transition: opacity 0.3s;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Loading Indicator */
+.loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 1s ease-in-out infinite;
+    margin-left: 10px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Footer */

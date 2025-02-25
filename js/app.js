@@ -4,6 +4,9 @@
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Check for camera permissions
+    checkCameraPermissions();
+    
     // Initialize database
     try {
         await GazeDB.init();
@@ -23,8 +26,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize chart
     initializeChart();
     
+    // Check if GazeRecorder API is loaded
+    if (typeof GazeRecorder === 'undefined') {
+        showError('GazeRecorder API not loaded. Please check your internet connection and try again.');
+    } else {
+        GazeTracker.showStatusMessage('Application initialized. Click "Start Tracking" to begin.');
+    }
+    
     console.log('Application initialized');
 });
+
+/**
+ * Check for camera permissions
+ */
+function checkCameraPermissions() {
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+            // Camera access granted
+            console.log('Camera access granted');
+            stream.getTracks().forEach(track => track.stop()); // Stop the stream
+        })
+        .catch(error => {
+            console.error('Camera access denied:', error);
+            showError('Camera access is required for eye tracking. Please allow camera access and refresh the page.');
+        });
+}
 
 /**
  * Set up event listeners for UI elements
@@ -35,14 +61,13 @@ function setupEventListeners() {
     startTrackingBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         
-        if (!GazeTracker.isTrackingActive()) {
+        if (!GazeTracker.isTrackingActive() && !GazeTracker.isCalibrationActive()) {
+            // Disable button during calibration and tracking
+            startTrackingBtn.classList.add('disabled');
+            startTrackingBtn.textContent = 'Calibrating...';
+            
             // Start calibration first
             GazeTracker.startCalibration();
-            
-            // After calibration, tracking will start automatically
-            setTimeout(() => {
-                GazeTracker.startTracking();
-            }, 100); // Small delay to ensure calibration starts first
         }
     });
     
@@ -52,10 +77,20 @@ function setupEventListeners() {
         e.preventDefault();
         
         if (GazeTracker.isTrackingActive()) {
+            // Disable button during processing
+            stopTrackingBtn.classList.add('disabled');
+            stopTrackingBtn.textContent = 'Stopping...';
+            
             await GazeTracker.stopTracking();
             
             // Update chart with session data
-            updateChartWithSessionData();
+            await updateChartWithSessionData();
+            
+            // Reset buttons
+            startTrackingBtn.classList.remove('disabled');
+            startTrackingBtn.textContent = 'Start Tracking';
+            stopTrackingBtn.classList.remove('disabled');
+            stopTrackingBtn.textContent = 'Stop Tracking';
         }
     });
     
@@ -67,6 +102,7 @@ function setupEventListeners() {
         const heatmapContainer = document.getElementById('heatmap-container');
         
         if (heatmapContainer.classList.contains('hidden')) {
+            showHeatmapBtn.textContent = 'Generating...';
             await GazeTracker.showHeatmap();
             showHeatmapBtn.textContent = 'Hide Heatmap';
         } else {
@@ -82,14 +118,17 @@ function setupEventListeners() {
         
         const sessionId = GazeTracker.getCurrentSessionId();
         if (!sessionId) {
-            showError('No active session to export');
+            GazeTracker.showError('No active session to export');
             return;
         }
         
         try {
+            exportDataBtn.textContent = 'Exporting...';
+            
             const jsonData = await GazeTracker.exportSessionData();
             if (!jsonData) {
-                showError('No data to export');
+                GazeTracker.showError('No data to export');
+                exportDataBtn.textContent = 'Export Data';
                 return;
             }
             
@@ -103,9 +142,21 @@ function setupEventListeners() {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            
+            exportDataBtn.textContent = 'Export Data';
+            GazeTracker.showStatusMessage('Data exported successfully');
         } catch (error) {
             console.error('Error exporting data:', error);
-            showError('Failed to export data');
+            GazeTracker.showError('Failed to export data');
+            exportDataBtn.textContent = 'Export Data';
+        }
+    });
+    
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        // ESC key to stop tracking
+        if (e.key === 'Escape' && GazeTracker.isTrackingActive()) {
+            stopTrackingBtn.click();
         }
     });
 }
@@ -187,8 +238,11 @@ async function updateChartWithSessionData() {
         // Update chart
         window.gazeChart.data.datasets[0].data = chartData;
         window.gazeChart.update();
+        
+        GazeTracker.showStatusMessage('Chart updated with session data');
     } catch (error) {
         console.error('Error updating chart:', error);
+        GazeTracker.showError('Failed to update chart with session data');
     }
 }
 

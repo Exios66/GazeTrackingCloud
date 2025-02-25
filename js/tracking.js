@@ -5,10 +5,12 @@
 
 const GazeTracker = (() => {
     let isTracking = false;
+    let isCalibrating = false;
     let currentSessionId = null;
     let dataPointsCount = 0;
     let startTime = null;
     let durationInterval = null;
+    let allGazeData = []; // Store all gaze data for the current session
     
     // DOM elements
     let gazeXElement = null;
@@ -33,8 +35,14 @@ const GazeTracker = (() => {
         dataPointsElement = document.getElementById('data-points');
         
         // Set up GazeRecorder event listeners
-        GazeRecorder.setGazeListener(handleGazeData);
-        GazeRecorder.setCalibrationEndListener(handleCalibrationEnd);
+        if (typeof GazeRecorder !== 'undefined') {
+            GazeRecorder.setGazeListener(handleGazeData);
+            GazeRecorder.setCalibrationEndListener(handleCalibrationEnd);
+            console.log('GazeRecorder API initialized successfully');
+        } else {
+            console.error('GazeRecorder API not found. Make sure the script is loaded correctly.');
+            showError('GazeRecorder API not found. Please check your internet connection and try again.');
+        }
         
         console.log('Gaze tracker initialized');
     };
@@ -52,8 +60,9 @@ const GazeTracker = (() => {
             // Create a new session in the database
             currentSessionId = await GazeDB.createSession();
             
-            // Reset counters
+            // Reset counters and data array
             dataPointsCount = 0;
+            allGazeData = [];
             startTime = Date.now();
             updateDataPointsDisplay();
             
@@ -61,16 +70,25 @@ const GazeTracker = (() => {
             durationInterval = setInterval(updateDurationDisplay, 1000);
             
             // Start GazeRecorder
-            GazeRecorder.startTracking();
-            
-            // Initialize heatmap
-            GazeHeatmap.init('heatmap-container');
-            GazeHeatmap.clear();
-            
-            isTracking = true;
-            console.log('Tracking started');
+            if (typeof GazeRecorder !== 'undefined') {
+                GazeRecorder.startTracking();
+                
+                // Initialize heatmap
+                GazeHeatmap.init('heatmap-container');
+                GazeHeatmap.clear();
+                
+                isTracking = true;
+                console.log('Tracking started');
+                
+                // Show status message
+                showStatusMessage('Tracking started. Look around the screen to generate data.');
+            } else {
+                console.error('GazeRecorder API not found');
+                showError('GazeRecorder API not found. Please refresh the page and try again.');
+            }
         } catch (error) {
             console.error('Error starting tracking:', error);
+            showError('Failed to start tracking. Please try again.');
         }
     };
     
@@ -85,7 +103,9 @@ const GazeTracker = (() => {
         
         try {
             // Stop GazeRecorder
-            GazeRecorder.stopTracking();
+            if (typeof GazeRecorder !== 'undefined') {
+                GazeRecorder.stopTracking();
+            }
             
             // Stop duration timer
             clearInterval(durationInterval);
@@ -93,12 +113,19 @@ const GazeTracker = (() => {
             // End session in database
             if (currentSessionId) {
                 await GazeDB.endSession(currentSessionId, dataPointsCount);
+                
+                // Save data to server
+                await saveSessionToServer(currentSessionId, allGazeData);
             }
             
             isTracking = false;
             console.log('Tracking stopped');
+            
+            // Show status message
+            showStatusMessage('Tracking stopped. Data has been saved.');
         } catch (error) {
             console.error('Error stopping tracking:', error);
+            showError('Failed to stop tracking properly. Some data may not be saved.');
         }
     };
     
@@ -106,12 +133,27 @@ const GazeTracker = (() => {
      * Start calibration
      */
     const startCalibration = () => {
+        if (isCalibrating) {
+            console.warn('Calibration is already in progress');
+            return;
+        }
+        
         // Show calibration overlay
         const calibrationOverlay = document.getElementById('calibration-overlay');
         calibrationOverlay.classList.remove('hidden');
         
         // Start GazeRecorder calibration
-        GazeRecorder.startCalibration();
+        if (typeof GazeRecorder !== 'undefined') {
+            isCalibrating = true;
+            GazeRecorder.startCalibration();
+            console.log('Calibration started');
+            
+            // Show status message
+            showStatusMessage('Calibration started. Please follow the red dot with your eyes.');
+        } else {
+            console.error('GazeRecorder API not found');
+            showError('GazeRecorder API not found. Please refresh the page and try again.');
+        }
     };
     
     /**
@@ -137,7 +179,7 @@ const GazeTracker = (() => {
         // Add to heatmap
         GazeHeatmap.addGazePoint(x, y);
         
-        // Store in database
+        // Store in database and memory
         storeGazeData(gazeData);
         
         // Increment counter
@@ -153,11 +195,18 @@ const GazeTracker = (() => {
         const calibrationOverlay = document.getElementById('calibration-overlay');
         calibrationOverlay.classList.add('hidden');
         
+        isCalibrating = false;
         console.log('Calibration completed');
+        
+        // Show status message
+        showStatusMessage('Calibration completed successfully. Tracking will start automatically.');
+        
+        // Start tracking automatically after calibration
+        startTracking();
     };
     
     /**
-     * Store gaze data in the database
+     * Store gaze data in the database and memory
      * @param {Object} gazeData - The gaze data to store
      */
     const storeGazeData = async (gazeData) => {
@@ -170,8 +219,8 @@ const GazeTracker = (() => {
                 eyeLeftX, eyeLeftY, eyeRightX, eyeRightY
             } = gazeData;
             
-            // Store in database
-            await GazeDB.storeGazeData(currentSessionId, {
+            // Create data object
+            const dataObject = {
                 gazeX: x,
                 gazeY: y,
                 gazeState: state,
@@ -185,8 +234,15 @@ const GazeTracker = (() => {
                 eyeLeftX: eyeLeftX || 0,
                 eyeLeftY: eyeLeftY || 0,
                 eyeRightX: eyeRightX || 0,
-                eyeRightY: eyeRightY || 0
-            });
+                eyeRightY: eyeRightY || 0,
+                timestamp: Date.now()
+            };
+            
+            // Store in database
+            await GazeDB.storeGazeData(currentSessionId, dataObject);
+            
+            // Store in memory
+            allGazeData.push(dataObject);
             
             // Update head position display if available
             if (headX !== undefined && headY !== undefined && headZ !== undefined) {
@@ -194,6 +250,40 @@ const GazeTracker = (() => {
             }
         } catch (error) {
             console.error('Error storing gaze data:', error);
+        }
+    };
+    
+    /**
+     * Save session data to server
+     * @param {number} sessionId - The session ID
+     * @param {Array} sessionData - The session data
+     * @returns {Promise} - Resolves when the data is saved
+     */
+    const saveSessionToServer = async (sessionId, sessionData) => {
+        try {
+            const response = await fetch('/api/save-session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sessionId,
+                    sessionData
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log(`Session data saved to server: ${result.filePath}`);
+                return result;
+            } else {
+                throw new Error(result.error || 'Failed to save session data to server');
+            }
+        } catch (error) {
+            console.error('Error saving session to server:', error);
+            showError('Failed to save session data to server. Data is still available in the browser.');
+            throw error;
         }
     };
     
@@ -248,11 +338,53 @@ const GazeTracker = (() => {
     };
     
     /**
+     * Show status message
+     * @param {string} message - The message to display
+     */
+    const showStatusMessage = (message) => {
+        // Create status message element if it doesn't exist
+        let statusElement = document.getElementById('status-message');
+        if (!statusElement) {
+            statusElement = document.createElement('div');
+            statusElement.id = 'status-message';
+            statusElement.style.position = 'fixed';
+            statusElement.style.bottom = '20px';
+            statusElement.style.left = '50%';
+            statusElement.style.transform = 'translateX(-50%)';
+            statusElement.style.backgroundColor = 'rgba(52, 152, 219, 0.9)';
+            statusElement.style.color = 'white';
+            statusElement.style.padding = '10px 20px';
+            statusElement.style.borderRadius = '4px';
+            statusElement.style.zIndex = '1000';
+            statusElement.style.transition = 'opacity 0.3s';
+            document.body.appendChild(statusElement);
+        }
+        
+        // Set message and show
+        statusElement.textContent = message;
+        statusElement.style.opacity = '1';
+        
+        // Hide after 3 seconds
+        setTimeout(() => {
+            statusElement.style.opacity = '0';
+        }, 3000);
+    };
+    
+    /**
+     * Show error message
+     * @param {string} message - The error message to display
+     */
+    const showError = (message) => {
+        alert(message);
+    };
+    
+    /**
      * Show heatmap
      */
     const showHeatmap = async () => {
         if (!currentSessionId) {
             console.warn('No active session');
+            showError('No active session. Start tracking first.');
             return;
         }
         
@@ -270,8 +402,12 @@ const GazeTracker = (() => {
             // Generate heatmap
             GazeHeatmap.generateFromData(heatmapData);
             GazeHeatmap.show();
+            
+            // Show status message
+            showStatusMessage('Heatmap generated from current session data.');
         } catch (error) {
             console.error('Error showing heatmap:', error);
+            showError('Failed to generate heatmap. Please try again.');
         }
     };
     
@@ -289,6 +425,7 @@ const GazeTracker = (() => {
     const exportSessionData = async () => {
         if (!currentSessionId) {
             console.warn('No active session');
+            showError('No active session to export. Start tracking first.');
             return null;
         }
         
@@ -296,6 +433,7 @@ const GazeTracker = (() => {
             return await GazeDB.exportSessionData(currentSessionId);
         } catch (error) {
             console.error('Error exporting session data:', error);
+            showError('Failed to export session data. Please try again.');
             return null;
         }
     };
@@ -306,6 +444,14 @@ const GazeTracker = (() => {
      */
     const isTrackingActive = () => {
         return isTracking;
+    };
+    
+    /**
+     * Check if calibration is in progress
+     * @returns {boolean} - True if calibration is in progress
+     */
+    const isCalibrationActive = () => {
+        return isCalibrating;
     };
     
     /**
@@ -325,6 +471,9 @@ const GazeTracker = (() => {
         hideHeatmap,
         exportSessionData,
         isTrackingActive,
-        getCurrentSessionId
+        isCalibrationActive,
+        getCurrentSessionId,
+        showStatusMessage,
+        showError
     };
 })(); 
