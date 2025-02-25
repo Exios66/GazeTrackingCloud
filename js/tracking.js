@@ -126,6 +126,13 @@ const GazeTracker = (() => {
             
             if (isTracking) {
                 statusText.textContent += ' (Tracking Active)';
+                
+                // Add recording indicator to video container if not already present
+                if (videoContainer && !document.querySelector('.recording-indicator')) {
+                    const recordingIndicator = document.createElement('div');
+                    recordingIndicator.className = 'recording-indicator';
+                    videoContainer.appendChild(recordingIndicator);
+                }
             }
         } else {
             statusIndicator.style.backgroundColor = '#e74c3c'; // Red
@@ -297,6 +304,22 @@ const GazeTracker = (() => {
             
             // Show status message
             showStatusMessage('Tracking stopped. Data has been saved.');
+            
+            // Remove recording indicator if it exists
+            const recordingIndicator = document.querySelector('.recording-indicator');
+            if (recordingIndicator && recordingIndicator.parentNode) {
+                recordingIndicator.parentNode.removeChild(recordingIndicator);
+            }
+            
+            // Show placeholder if video container is empty
+            if (videoContainer && videoContainer.children.length === 0) {
+                const placeholder = document.createElement('div');
+                placeholder.id = 'video-placeholder';
+                const placeholderText = document.createElement('p');
+                placeholderText.textContent = 'Your webcam feed will appear here';
+                placeholder.appendChild(placeholderText);
+                videoContainer.appendChild(placeholder);
+            }
         } catch (error) {
             console.error('Error stopping tracking:', error);
             showError('Failed to stop tracking properly. Some data may not be saved.');
@@ -539,6 +562,9 @@ const GazeTracker = (() => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        
+        // Show success message
+        showStatusMessage(`CSV file "${filename}" downloaded successfully`);
     };
     
     /**
@@ -629,7 +655,13 @@ const GazeTracker = (() => {
      * @param {string} message - The error message to display
      */
     const showError = (message) => {
-        alert(message);
+        // Use the app's showError function if available
+        if (typeof window.showError === 'function') {
+            window.showError(message, null, 'error');
+        } else {
+            // Fallback to alert
+            alert(message);
+        }
     };
     
     /**
