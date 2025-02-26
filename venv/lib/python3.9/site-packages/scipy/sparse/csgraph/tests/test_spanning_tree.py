@@ -27,9 +27,8 @@ def test_minimum_spanning_tree():
     # Ensure minimum spanning tree code gives this expected output.
     csgraph = csr_matrix(graph)
     mintree = minimum_spanning_tree(csgraph)
-    mintree_array = mintree.toarray()
-    npt.assert_array_equal(mintree_array, expected,
-                           'Incorrect spanning tree found.')
+    npt.assert_array_equal(mintree.toarray(), expected,
+        'Incorrect spanning tree found.')
 
     # Ensure that the original graph was not modified.
     npt.assert_array_equal(csgraph.toarray(), graph,

@@ -2,8 +2,8 @@
 # Use the `scipy.linalg` namespace for importing the functions
 # included below.
 
-from scipy._lib.deprecation import _sub_module_deprecation
-
+import warnings
+from . import _matfuncs
 
 __all__ = [  # noqa: F822
     'expm', 'cosm', 'sinm', 'tanm', 'coshm', 'sinhm',
@@ -20,6 +20,13 @@ def __dir__():
 
 
 def __getattr__(name):
-    return _sub_module_deprecation(sub_package="linalg", module="matfuncs",
-                                   private_modules=["_matfuncs"], all=__all__,
-                                   attribute=name)
+    if name not in __all__:
+        raise AttributeError(
+            "scipy.linalg.matfuncs is deprecated and has no attribute "
+            f"{name}. Try looking in scipy.linalg instead.")
+
+    warnings.warn(f"Please use `{name}` from the `scipy.linalg` namespace, "
+                  "the `scipy.linalg.matfuncs` namespace is deprecated.",
+                  category=DeprecationWarning, stacklevel=2)
+
+    return getattr(_matfuncs, name)

@@ -2,7 +2,9 @@
 # Use the `scipy.io.matlab` namespace for importing the functions
 # included below.
 
-from scipy._lib.deprecation import _sub_module_deprecation
+import warnings
+from . import _mio
+
 
 __all__ = [  # noqa: F822
     'mat_reader_factory', 'loadmat', 'savemat', 'whosmat',
@@ -15,6 +17,13 @@ def __dir__():
 
 
 def __getattr__(name):
-    return _sub_module_deprecation(sub_package="io.matlab", module="mio",
-                                   private_modules=["_mio"], all=__all__,
-                                   attribute=name)
+    if name not in __all__:
+        raise AttributeError(
+            "scipy.io.matlab.mio is deprecated and has no attribute "
+            f"{name}. Try looking in scipy.io.matlab instead.")
+
+    warnings.warn(f"Please use `{name}` from the `scipy.io.matlab` namespace, "
+                  "the `scipy.io.matlab.mio` namespace is deprecated.",
+                  category=DeprecationWarning, stacklevel=2)
+
+    return getattr(_mio, name)

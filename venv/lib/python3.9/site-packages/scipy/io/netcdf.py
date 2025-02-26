@@ -2,7 +2,8 @@
 # Use the `scipy.io` namespace for importing the functions
 # included below.
 
-from scipy._lib.deprecation import _sub_module_deprecation
+import warnings
+from . import _netcdf
 
 __all__ = [  # noqa: F822
     'netcdf_file', 'netcdf_variable',
@@ -20,6 +21,13 @@ def __dir__():
 
 
 def __getattr__(name):
-    return _sub_module_deprecation(sub_package="io", module="netcdf",
-                                   private_modules=["_netcdf"], all=__all__,
-                                   attribute=name)
+    if name not in __all__:
+        raise AttributeError(
+            "scipy.io.netcdf is deprecated and has no attribute "
+            f"{name}. Try looking in scipy.io instead.")
+
+    warnings.warn(f"Please use `{name}` from the `scipy.io` namespace, "
+                  "the `scipy.io.netcdf` namespace is deprecated.",
+                  category=DeprecationWarning, stacklevel=2)
+
+    return getattr(_netcdf, name)

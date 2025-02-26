@@ -2,7 +2,9 @@
 # Use the `scipy.signal` namespace for importing the functions
 # included below.
 
-from scipy._lib.deprecation import _sub_module_deprecation
+import warnings
+from . import _lti_conversion
+
 
 __all__ = [  # noqa: F822
     'tf2ss', 'abcd_normalize', 'ss2tf', 'zpk2ss', 'ss2zpk',
@@ -16,6 +18,13 @@ def __dir__():
 
 
 def __getattr__(name):
-    return _sub_module_deprecation(sub_package="signal", module="lti_conversion",
-                                   private_modules=["_lti_conversion"], all=__all__,
-                                   attribute=name)
+    if name not in __all__:
+        raise AttributeError(
+            "scipy.signal.lti_conversion is deprecated and has no attribute "
+            f"{name}. Try looking in scipy.signal instead.")
+
+    warnings.warn(f"Please use `{name}` from the `scipy.signal` namespace, "
+                  "the `scipy.signal.lti_conversion` namespace is deprecated.",
+                  category=DeprecationWarning, stacklevel=2)
+
+    return getattr(_lti_conversion, name)

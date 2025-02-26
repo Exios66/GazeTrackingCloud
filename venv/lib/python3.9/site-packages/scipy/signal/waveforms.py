@@ -2,7 +2,8 @@
 # Use the `scipy.signal` namespace for importing the functions
 # included below.
 
-from scipy._lib.deprecation import _sub_module_deprecation
+import warnings
+from . import _waveforms
 
 __all__ = [  # noqa: F822
     'sawtooth', 'square', 'gausspulse', 'chirp', 'sweep_poly',
@@ -16,6 +17,13 @@ def __dir__():
 
 
 def __getattr__(name):
-    return _sub_module_deprecation(sub_package="signal", module="waveforms",
-                                   private_modules=["_waveforms"], all=__all__,
-                                   attribute=name)
+    if name not in __all__:
+        raise AttributeError(
+            "scipy.signal.waveforms is deprecated and has no attribute "
+            f"{name}. Try looking in scipy.signal instead.")
+
+    warnings.warn(f"Please use `{name}` from the `scipy.signal` namespace, "
+                  "the `scipy.signal.waveforms` namespace is deprecated.",
+                  category=DeprecationWarning, stacklevel=2)
+
+    return getattr(_waveforms, name)

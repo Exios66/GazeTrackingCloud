@@ -5,12 +5,11 @@ from pytest import raises as assert_raises
 from scipy import sparse
 
 from scipy.sparse import csgraph
-from scipy._lib._util import np_long, np_ulong
 
 
 def check_int_type(mat):
     return np.issubdtype(mat.dtype, np.signedinteger) or np.issubdtype(
-        mat.dtype, np_ulong
+        mat.dtype, np.uint
     )
 
 
@@ -161,19 +160,17 @@ def _check_laplacian_dtype(
                 _assert_allclose_sparse(L, mat)
 
 
-INT_DTYPES = {np.intc, np_long, np.longlong}
-REAL_DTYPES = {np.float32, np.float64, np.longdouble}
-COMPLEX_DTYPES = {np.complex64, np.complex128, np.clongdouble}
-# use sorted list to ensure fixed order of tests
-DTYPES = sorted(INT_DTYPES ^ REAL_DTYPES ^ COMPLEX_DTYPES, key=str)
+INT_DTYPES = {np.intc, np.int_, np.longlong}
+REAL_DTYPES = {np.single, np.double, np.longdouble}
+COMPLEX_DTYPES = {np.csingle, np.cdouble, np.clongdouble}
+# use sorted tuple to ensure fixed order of tests
+DTYPES = tuple(sorted(INT_DTYPES ^ REAL_DTYPES ^ COMPLEX_DTYPES, key=str))
 
 
 @pytest.mark.parametrize("dtype", DTYPES)
 @pytest.mark.parametrize("arr_type", [np.array,
                                       sparse.csr_matrix,
-                                      sparse.coo_matrix,
-                                      sparse.csr_array,
-                                      sparse.coo_array])
+                                      sparse.coo_matrix])
 @pytest.mark.parametrize("copy", [True, False])
 @pytest.mark.parametrize("normed", [True, False])
 @pytest.mark.parametrize("use_out_degree", [True, False])
@@ -247,11 +244,7 @@ def test_sparse_formats(fmt, normed, copy):
 
 
 @pytest.mark.parametrize(
-    "arr_type", [np.asarray,
-                 sparse.csr_matrix,
-                 sparse.coo_matrix,
-                 sparse.csr_array,
-                 sparse.coo_array]
+    "arr_type", [np.asarray, sparse.csr_matrix, sparse.coo_matrix]
 )
 @pytest.mark.parametrize("form", ["array", "function", "lo"])
 def test_laplacian_symmetrized(arr_type, form):
@@ -308,11 +301,7 @@ def test_laplacian_symmetrized(arr_type, form):
 
 
 @pytest.mark.parametrize(
-    "arr_type", [np.asarray,
-                 sparse.csr_matrix,
-                 sparse.coo_matrix,
-                 sparse.csr_array,
-                 sparse.coo_array]
+    "arr_type", [np.asarray, sparse.csr_matrix, sparse.coo_matrix]
 )
 @pytest.mark.parametrize("dtype", DTYPES)
 @pytest.mark.parametrize("normed", [True, False])

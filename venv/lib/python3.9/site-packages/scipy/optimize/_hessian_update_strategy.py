@@ -183,8 +183,7 @@ class FullHessianUpdateStrategy(HessianUpdateStrategy):
                  'function is linear. If the function is linear '
                  'better results can be obtained by defining the '
                  'Hessian as zero instead of using quasi-Newton '
-                 'approximations.',
-                 UserWarning, stacklevel=2)
+                 'approximations.', UserWarning)
             return
         if self.first_iteration:
             # Get user specific scale
@@ -342,7 +341,7 @@ class BFGS(FullHessianUpdateStrategy):
         Mw = self.dot(w)
         wMw = Mw.dot(w)
         # Guarantee that wMw > 0 by reinitializing matrix.
-        # While this is always true in exact arithmetic,
+        # While this is always true in exact arithmetics,
         # indefinite matrix may appear due to roundoff errors.
         if wMw <= 0.0:
             scale = self._auto_scale(delta_x, delta_grad)
@@ -357,7 +356,7 @@ class BFGS(FullHessianUpdateStrategy):
         # Check if curvature condition is violated
         if wz <= self.min_curvature * wMw:
             # If the option 'skip_update' is set
-            # we just skip the update when the condition
+            # we just skip the update when the condion
             # is violated.
             if self.exception_strategy == 'skip_update':
                 return

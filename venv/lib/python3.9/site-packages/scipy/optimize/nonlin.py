@@ -2,7 +2,8 @@
 # Use the `scipy.optimize` namespace for importing the functions
 # included below.
 
-from scipy._lib.deprecation import _sub_module_deprecation
+import warnings
+from . import _nonlin
 
 
 __all__ = [  # noqa: F822
@@ -52,6 +53,13 @@ def __dir__():
 
 
 def __getattr__(name):
-    return _sub_module_deprecation(sub_package="optimize", module="nonlin",
-                                   private_modules=["_nonlin"], all=__all__,
-                                   attribute=name)
+    if name not in __all__:
+        raise AttributeError(
+            "scipy.optimize.nonlin is deprecated and has no attribute "
+            f"{name}. Try looking in scipy.optimize instead.")
+
+    warnings.warn(f"Please use `{name}` from the `scipy.optimize` namespace, "
+                  "the `scipy.optimize.nonlin` namespace is deprecated.",
+                  category=DeprecationWarning, stacklevel=2)
+
+    return getattr(_nonlin, name)

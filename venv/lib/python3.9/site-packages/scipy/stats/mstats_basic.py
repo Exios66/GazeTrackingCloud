@@ -2,7 +2,8 @@
 # Use the `scipy.stats` namespace for importing the functions
 # included below.
 
-from scipy._lib.deprecation import _sub_module_deprecation
+import warnings
+from . import _mstats_basic
 
 
 __all__ = [  # noqa: F822
@@ -31,7 +32,7 @@ __all__ = [  # noqa: F822
     'brunnermunzel', 'ma', 'masked', 'nomask', 'namedtuple',
     'distributions', 'stats_linregress', 'stats_LinregressResult',
     'stats_theilslopes', 'stats_siegelslopes', 'ModeResult',
-    'PointbiserialrResult',
+    'SpearmanrResult', 'KendalltauResult', 'PointbiserialrResult',
     'Ttest_1sampResult', 'Ttest_indResult', 'Ttest_relResult',
     'MannwhitneyuResult', 'KruskalResult', 'trimdoc', 'trim1',
     'DescribeResult', 'stde_median', 'SkewtestResult', 'KurtosistestResult',
@@ -45,6 +46,13 @@ def __dir__():
 
 
 def __getattr__(name):
-    return _sub_module_deprecation(sub_package="stats", module="mstats_basic",
-                                   private_modules=["_mstats_basic"], all=__all__,
-                                   attribute=name, correct_module="mstats")
+    if name not in __all__:
+        raise AttributeError(
+            "scipy.stats.mstats_basic is deprecated and has no attribute "
+            f"{name}. Try looking in scipy.stats instead.")
+
+    warnings.warn(f"Please use `{name}` from the `scipy.stats` namespace, "
+                  "the `scipy.stats.mstats_basic` namespace is deprecated.",
+                  category=DeprecationWarning, stacklevel=2)
+
+    return getattr(_mstats_basic, name)
