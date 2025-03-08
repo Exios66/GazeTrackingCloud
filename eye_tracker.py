@@ -1,17 +1,22 @@
 import cv2
 import numpy as np
 from typing import Tuple, Optional
+import os
 
 class EyeTracker:
     def __init__(self):
-        # Load the pre-trained eye cascade classifier
-        self.eye_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_eye.xml'
-        )
-        # Load the face cascade classifier (helps in limiting eye detection region)
-        self.face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-        )
+        # Load the pre-trained eye cascade classifier from local directory
+        eye_cascade_path = os.path.join('haarcascades', 'haarcascade_eye.xml')
+        face_cascade_path = os.path.join('haarcascades', 'haarcascade_frontalface_default.xml')
+        
+        self.eye_cascade = cv2.CascadeClassifier(eye_cascade_path)
+        self.face_cascade = cv2.CascadeClassifier(face_cascade_path)
+        
+        # Verify cascade files loaded successfully
+        if self.eye_cascade.empty():
+            raise ValueError(f"Error: Could not load eye cascade classifier from {eye_cascade_path}")
+        if self.face_cascade.empty():
+            raise ValueError(f"Error: Could not load face cascade classifier from {face_cascade_path}")
         
     def detect_eyes(self, frame: np.ndarray) -> list:
         """
